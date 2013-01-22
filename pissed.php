@@ -1,6 +1,8 @@
 <?php
 
-define('TOKEN_PATTERN',  '/^(\(|\)|"([^"]|\\")*|[a-z]+)$/s');
+define('TOKEN_OP', '(');
+define('TOKEN_CP', ')');
+define('TOKEN_PATTERN',  '/^(\(|\)|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
 define('TOKEN_COMPLETE', '/^(\(|\)|"([^"]|\\")*")$/m');
 
 //Prefix: There can be any ammount of whitespace at the beginning of the token.
@@ -36,21 +38,57 @@ function peel_whitespace($bstream){
   else{$bstream->putc($byte);}
 }
 
+function report_token($token){
+  print "Token: ".$token."\n";
+  return $token;
+}
+
 function read_token($bstream){
   $buffer = '';
   $first = true;
   peel_whitespace($bstream);
   do{
     $buffer .= $bstream->getc();
-    if(preg_match(TOKEN_COMPLETE, $buffer)){return $buffer;}
+    if(preg_match(TOKEN_COMPLETE, $buffer)){
+      return report_token($buffer);
+    }
   } while(is_token($buffer));
 
   $bstream->putc(substr($buffer,-1));
-  return substr($buffer,0,-1);
+  return report_token(substr($buffer,0,-1));
+}
+
+function cons($car,$cdr){
+  return Array($car,$cdr);
+}
+
+function read_list($bstream){
+  $token = read_token($bstream);
+  if($token == TOKEN_CP){
+    return NULL;
+  }
+  else{
+    return cons($token,read_list($bstream));
+  }
+}
+
+function read_sexp($bstream){
+  $token = read_token($bstream);
+  if($token == TOKEN_OP){
+    $next_token = read_sexp($bstream);
+    if($next_token == TOKEN_CP){
+      return null;
+    }
+    else{
+      return cons($next_token,read_list($bstream));
+    }
+  }
+  else{
+    return $token;
+  }
+  //  print "is list: ".((TOKEN_OP == $token) ? "yes" : "no")."\n";
 }
 
 $input = new BufferedStream(fopen('php://stdin','r'));
-print("Token: '".read_token($input)."'\n");
-print("Token: '".read_token($input)."'\n");
-print("Token: '".read_token($input)."'\n");
+print_r(read_sexp($input));
 ?>
