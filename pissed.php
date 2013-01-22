@@ -4,6 +4,9 @@ define('TOKEN_OP', '(');
 define('TOKEN_CP', ')');
 define('TOKEN_PATTERN',  '/^(\(|\)|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
 define('TOKEN_COMPLETE', '/^(\(|\)|"([^"]|\\")*")$/m');
+define('TOKEN_INTEGER', '/^\d+$/');
+define('TOKEN_FLOAT', '/^(\d+\.\d*|\d*\.\d+)$/');
+define('TOKEN_STRING', '/^".*"$/');
 
 //Prefix: There can be any ammount of whitespace at the beginning of the token.
 //Single char tokens: These can only be 1 char long ( )
@@ -43,6 +46,21 @@ function report_token($token){
   return $token;
 }
 
+function resolve_primative($token){
+  if(preg_match(TOKEN_INTEGER,$token)){
+    return intval($token);
+  }
+  elseif(preg_match(TOKEN_FLOAT,$token)){
+    return floatval($token);
+  }
+  elseif(preg_match(TOKEN_STRING,$token)){
+    return substr($token, 1,-1);
+  }
+  else{
+    return $token;
+  }
+}
+
 function read_token($bstream){
   $buffer = '';
   $first = true;
@@ -63,12 +81,12 @@ function cons($car,$cdr){
 }
 
 function read_list($bstream){
-  $token = read_token($bstream);
-  if($token == TOKEN_CP){
+  $sexp = read_sexp($bstream);
+  if($sexp == TOKEN_CP){
     return NULL;
   }
   else{
-    return cons($token,read_list($bstream));
+    return cons($sexp,read_list($bstream));
   }
 }
 
@@ -84,7 +102,7 @@ function read_sexp($bstream){
     }
   }
   else{
-    return $token;
+    return resolve_primative($token);
   }
   //  print "is list: ".((TOKEN_OP == $token) ? "yes" : "no")."\n";
 }
