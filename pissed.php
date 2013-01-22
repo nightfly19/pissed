@@ -35,7 +35,7 @@ class BufferedStream{
 class Symbol{
   public $symbol_name;
   public static $symbols = Array();
-  
+
   function __construct($symbol){
     $this->symbol_name = $symbol;
   }
@@ -88,7 +88,8 @@ function resolve_primative($token){
 
 
 function is_symbol($current,$desired){
-  if((get_class($current) == "Symbol")
+  if(is_object($current)
+     and (get_class($current) == "Symbol")
      and ($current == Symbol::symbol($desired))){
     return true;
   }
@@ -128,6 +129,10 @@ function cons($car,$cdr){
 
 
 
+function car($list){return $list[0];}
+
+function cdr($list){return $list[1];}
+
 function read_list($bstream){
   $sexp = read_sexp($bstream);
   if(is_symbol($sexp,TOKEN_CP)){
@@ -158,6 +163,52 @@ function read_sexp($bstream){
 
 
 
+//Print stuff
+
+
+function form_print($form, $in_list=false){
+
+  switch(gettype($form)){
+  case "NULL":
+    if($in_list){
+      return ")";
+    }
+    else{
+      return "()";
+    }
+    break;
+  case "integer":
+    return "$form"." ";
+    break;
+  case "double":
+    return "$form"." ";
+    break;
+  case "string":
+    return '"'.str_replace('"','\"',$form).'"'." ";
+    break;
+  case "array":
+    return ($in_list ? "" : "(")
+      .form_print(car($form))
+      .form_print(cdr($form), true)."";
+    break;
+  case "object":
+    switch(get_class($form)){
+    case "Symbol":
+      return $form->symbol_name." ";
+      break;
+    default:
+      return "<UNKOWN CLASS>";
+    }
+    break;
+  default:
+    return "Something else\n";
+    break;
+  }
+}
+
+
+
+
 $input = new BufferedStream(fopen('php://stdin','r'));
-print_r(read_sexp($input));
+print form_print((read_sexp($input)));
 ?>
