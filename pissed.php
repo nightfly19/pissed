@@ -14,8 +14,8 @@ define('TOKEN_STRING', '/^".*"$/');
 //Otherwise the token lasts until a whitespace character or ( or ) is found
 
 class BufferedStream{
-  var $stream;
-  var $buffer;
+  public $stream;
+  public $buffer;
 
   function __construct($stream){
     $this->stream = $stream;
@@ -30,9 +30,36 @@ class BufferedStream{
   function putc($char){array_unshift($this->buffer,$char);}
 }
 
+
+
+class Symbol{
+  public $symbol_name;
+  public static $symbols = Array();
+  
+  function __construct($symbol){
+    $this->symbol_name = $symbol;
+  }
+
+  public static function symbol($symbol_name){
+    if(array_key_exists($symbol_name, self::$symbols)){
+      return self::$symbols[$symbol_name];
+    }
+    else{
+      $new_symbol = new Symbol($symbol_name);
+      self::$symbols[$symbol_name] = $new_symbol;
+      return $new_symbol;
+    }
+  }
+
+}
+
+
+
 function is_token($token){
   return (preg_match(TOKEN_PATTERN, $token) and !preg_match('/[\n\r]$/',$token));
 }
+
+
 
 function peel_whitespace($bstream){
   $byte = $bstream->getc();
@@ -41,10 +68,7 @@ function peel_whitespace($bstream){
   else{$bstream->putc($byte);}
 }
 
-function report_token($token){
-  print "Token: ".$token."\n";
-  return $token;
-}
+
 
 function resolve_primative($token){
   if(preg_match(TOKEN_INTEGER,$token)){
@@ -57,9 +81,29 @@ function resolve_primative($token){
     return substr($token, 1,-1);
   }
   else{
-    return $token;
+    return Symbol::symbol($token);
   }
 }
+
+
+
+function is_symbol($current,$desired){
+  if((get_class($current) == "Symbol")
+     and ($current == Symbol::symbol($desired))){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+
+
+function report_token($token){
+  return resolve_primative($token);
+}
+
+
 
 function read_token($bstream){
   $buffer = '';
@@ -76,13 +120,17 @@ function read_token($bstream){
   return report_token(substr($buffer,0,-1));
 }
 
+
+
 function cons($car,$cdr){
   return Array($car,$cdr);
 }
 
+
+
 function read_list($bstream){
   $sexp = read_sexp($bstream);
-  if($sexp == TOKEN_CP){
+  if(is_symbol($sexp,TOKEN_CP)){
     return NULL;
   }
   else{
@@ -90,11 +138,13 @@ function read_list($bstream){
   }
 }
 
+
+
 function read_sexp($bstream){
   $token = read_token($bstream);
-  if($token == TOKEN_OP){
+  if(is_symbol($token, TOKEN_OP)){
     $next_token = read_sexp($bstream);
-    if($next_token == TOKEN_CP){
+    if(is_symbol($next_token, TOKEN_CP)){
       return null;
     }
     else{
@@ -102,10 +152,11 @@ function read_sexp($bstream){
     }
   }
   else{
-    return resolve_primative($token);
+    return $token;
   }
-  //  print "is list: ".((TOKEN_OP == $token) ? "yes" : "no")."\n";
 }
+
+
 
 $input = new BufferedStream(fopen('php://stdin','r'));
 print_r(read_sexp($input));
