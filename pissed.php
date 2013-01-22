@@ -8,10 +8,24 @@ define('TOKEN_INTEGER', '/^\d+$/');
 define('TOKEN_FLOAT', '/^(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
 
+global $special_forms;
+
 //Prefix: There can be any ammount of whitespace at the beginning of the token.
 //Single char tokens: These can only be 1 char long ( )
 //If the first char is a " the token lasts until the another " is found that isn't preceded by \
 //Otherwise the token lasts until a whitespace character or ( or ) is found
+
+function cons($car,$cdr = null){
+  return Array($car,$cdr);
+}
+
+function car($list){return $list[0];}
+
+function cdr($list){return $list[1];}
+
+function setcar($list,$car){$list[0] = $car;return $list;}
+
+function setcdr($list,$cdr){$list[1] = $cdr;return $list;}
 
 class BufferedStream{
   public $stream;
@@ -55,6 +69,51 @@ class Symbol{
 
 
 
+class Context{
+  public $parent;
+  public $symbols;
+  public $immutable;
+  
+  function __construct($parent = null, $immutable = false){
+    $this->parent = $parent;
+    $this->symbols = Array();
+    $this->immutable = $immutable;
+  }
+
+  function def($symbol, $value){
+    if($this->immutable){
+      return $this->parent->def($symbol, $value);
+    }
+
+    if($this->contains($symbol)){
+      return car(setcar($this->symbols[$symbol], $value));
+    }
+    else{
+      $this->symbols[$symbol->symbol_name] = cons($value);
+      return car($this->symbols[$symbol->symbol_name]);
+    }
+  }
+
+  function contains($symbol){
+    return array_key_exists($symbol->symbol_name, $this->symbols);
+  }
+  
+  function deref($symbol){
+    if($this->contains($symbol)){
+      return car($this->symbols[$symbol->symbol_name]);
+    }
+    elseif($this->parent){
+      return $this->parent->deref($symbol);
+    }
+    else{
+      return null;
+    }
+  }
+
+}
+
+
+
 function is_token($token){
   return (preg_match(TOKEN_PATTERN, $token) and !preg_match('/[\n\r]$/',$token));
 }
@@ -87,10 +146,16 @@ function resolve_primative($token){
 
 
 
+function m_symbol($symbol_name){
+  return Symbol::symbol($symbol_name);
+}
+
+
+
 function is_symbol($current,$desired){
   if(is_object($current)
      and (get_class($current) == "Symbol")
-     and ($current == Symbol::symbol($desired))){
+     and ($current == m_symbol($desired))){
     return true;
   }
   else{
@@ -123,15 +188,6 @@ function read_token($bstream){
 
 
 
-function cons($car,$cdr){
-  return Array($car,$cdr);
-}
-
-
-
-function car($list){return $list[0];}
-
-function cdr($list){return $list[1];}
 
 function read_list($bstream){
   $sexp = read_sexp($bstream);
@@ -210,5 +266,10 @@ function form_print($form, $in_list=false){
 
 
 $input = new BufferedStream(fopen('php://stdin','r'));
-print form_print((read_sexp($input)));
+//print form_print((read_sexp($input)));
+//print_r(read_sexp($input));
+$context = new Context();
+$context->def(m_symbol("hello"),"Something here");
+//print_r($context);
+print $context->deref(m_symbol("hello"));
 ?>
