@@ -397,38 +397,35 @@ function pissed_call_lambda($lambda, $args, $context){
 
 function special_form($form, $args, $context){
   switch($form->symbol_name){
-  case "special*":
-    return "It's really special";
-    break;
   case "+":
     return pissed_add($args, $context);
     break;
   case "-":
     return pissed_sub($args, $context);
     break;
-  case "quote*":
+  case "quote":
     return pissed_quote($args, $context);
     break;
-  case "list*":
+  case "list":
     return pissed_list($args, $context);
     break;
-  case "def*":
+  case "def":
     return pissed_def($args, $context);
     break;
-  case "exit*":
+  case "exit":
     return pissed_exit($args, $context);
     break;
-  case "do*":
+  case "do":
     return pissed_do($args, $context);
     break;
-  case "let*":
+  case "let":
     return pissed_let($args, $context);
     break;
-  case "lambda*":
+  case "lambda":
     return pissed_lambda($args, $context);
     break;
   default:
-    return "nothing at all!";
+    throw new Exception("Missing special form");
     break;
   }
 }
@@ -487,18 +484,16 @@ $input = new BufferedStream(fopen('php://stdin','r'));
 $GLOBALS['special_forms'] = new Context();
 $special_forms->def(m_symbol("+"));
 $special_forms->def(m_symbol("-"));
-$special_forms->def(m_symbol("quote*"));
-$special_forms->def(m_symbol("list*"));
-$special_forms->def(m_symbol("def*"));
-$special_forms->def(m_symbol("exit*"));
-$special_forms->def(m_symbol("do*"));
-$special_forms->def(m_symbol("let*"));
-$special_forms->def(m_symbol("lambda*"));
-//$special_forms->def(m_symbol("read*"));
+$special_forms->def(m_symbol("quote"));
+$special_forms->def(m_symbol("list"));
+$special_forms->def(m_symbol("def"));
+$special_forms->def(m_symbol("exit"));
+$special_forms->def(m_symbol("do"));
+$special_forms->def(m_symbol("let"));
+$special_forms->def(m_symbol("lambda"));
 
 //Initialize global defs;
 $global_context = new Context();
-$global_context->def(m_symbol("felix"), "perfect");
 $global_context->def(m_symbol("*input*"),$input);
 
 while(true){
