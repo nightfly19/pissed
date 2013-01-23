@@ -112,7 +112,13 @@ class Context{
 
 }
 
+$GLOBALS['special_forms'] = new Context();
 
+function def_special_form($name,$function){
+  //print "Name: ".m_symbol($name)->symbol_name."\n";
+  //print_r($GLOBALS['special_forms']);
+  return $GLOBALS['special_forms']->def(m_symbol($name), $function);
+}
 
 class Lambda{
   public $arg_list;
@@ -292,80 +298,80 @@ function sexp_print($form, $in_list=false){
     }
     break;
   default:
-    return "Something else\n";
+    return "<OTHER THING>\n";
     break;
   }
 }
 
-function pissed_add($args, $context){
-  $temp = 0;
-  $pointer = $args;
-  while(!is_null($pointer)){
-    $temp += sexp_eval(car($pointer), $context);
-    $pointer = cdr($pointer);
-  }
-  return $temp;
-}
+def_special_form('+', function ($args, $context){
+    $temp = 0;
+    $pointer = $args;
+    while(!is_null($pointer)){
+      $temp += sexp_eval(car($pointer), $context);
+      $pointer = cdr($pointer);
+    }
+    return $temp;
+  });
 
-function pissed_sub($args, $context){
-  $pointer = $args;
-  $first = true;
-  $temp = 0;
+def_special_form('-', function ($args, $context){
+    $pointer = $args;
+    $first = true;
+    $temp = 0;
 
-  if($pointer === null){
-    throw new Exception("Not enough args to -");
-  }
+    if($pointer === null){
+      throw new Exception("Not enough args to -");
+    }
 
-  while(!is_null($pointer)){
-    if($first){
-      $temp = sexp_eval(car($pointer), $context);
-      $first = false;
-      if(cdr($pointer) === null){
-        return -$temp;
+    while(!is_null($pointer)){
+      if($first){
+        $temp = sexp_eval(car($pointer), $context);
+        $first = false;
+        if(cdr($pointer) === null){
+          return -$temp;
+        }
       }
+      else{
+        $temp -= sexp_eval(car($pointer), $context);
+      }
+      $pointer = cdr($pointer);
     }
-    else{
-      $temp -= sexp_eval(car($pointer), $context);
+    return $temp;
+  });
+
+def_special_form('quote', function ($args, $context){
+    return $args;
+  });
+
+def_special_form('list', function ($args, $context){
+    $car = car($args);
+    $cdr = cdr($args);
+    return cons(sexp_eval($car, $context),
+                (($cdr === null) ? null : pissed_list($cdr, $context)));
+  });
+
+def_special_form('def', function ($args, $context){
+    $symbol = car($args);
+    $value = sexp_eval(car(cdr($args)), $context);
+    $context->def($symbol, $value);
+    return $value;
+  });
+
+def_special_form('exit', function ($args, $context){
+    exit(car($args));
+  });
+
+def_special_form('do', function ($args, $context){
+    $output = null;
+    $current = $args;
+    while(!is_null($current)){
+      $output = sexp_eval(car($current), $context);
+      $current = cdr($current);
     }
-    $pointer = cdr($pointer);
-  }
-  return $temp;
-}
 
-function pissed_quote($args, $context){
-  return $args;
-}
+    return $output;
+  });
 
-function pissed_list($args, $context){
-  $car = car($args);
-  $cdr = cdr($args);
-  return cons(sexp_eval($car, $context),
-              (($cdr === null) ? null : pissed_list($cdr, $context)));
-}
-
-function pissed_def($args, $context){
-  $symbol = car($args);
-  $value = sexp_eval(car(cdr($args)), $context);
-  $context->def($symbol, $value);
-  return $value;
-}
-
-function pissed_exit($args, $context){
-  exit(car($args));
-}
-
-function pissed_do($args, $context){
-  $output = null;
-  $current = $args;
-  while(!is_null($current)){
-    $output = sexp_eval(car($current), $context);
-    $current = cdr($current);
-  }
-
-  return $output;
-}
-
-function pissed_let($args, $context){
+def_special_form('let', function ($args, $context){
   $sub_context = new Context($context);
   $sym_defs = car($args);
 
@@ -377,13 +383,14 @@ function pissed_let($args, $context){
 
   $sub_context->immutable = true;
 
-  return pissed_do(cdr($args),$sub_context);
-}
+  $do = special_form(m_symbol('do'));
+  return $do(cdr($args),$sub_context);
+  });
 
 
-function pissed_lambda($args, $contxt){
+def_special_form('lambda', function ($args, $context){
   return new Lambda(car($args), cdr($args));
-}
+  });
 
 function pissed_call_lambda($lambda, $args, $context){
   $r_arg_list = $lambda->arg_list;
@@ -395,43 +402,17 @@ function pissed_call_lambda($lambda, $args, $context){
     $r_args = cdr($r_args);
   }
 
-  return pissed_let(cons($zipped, $lambda->body), $context);
+  $let = special_form(m_symbol('let'));
+  return $let(cons($zipped, $lambda->body), $context);
 }
 
-function special_form($form, $args, $context){
-  switch($form->symbol_name){
-  case "+":
-    return pissed_add($args, $context);
-    break;
-  case "-":
-    return pissed_sub($args, $context);
-    break;
-  case "quote":
-    return pissed_quote($args, $context);
-    break;
-  case "list":
-    return pissed_list($args, $context);
-    break;
-  case "def":
-    return pissed_def($args, $context);
-    break;
-  case "exit":
-    return pissed_exit($args, $context);
-    break;
-  case "do":
-    return pissed_do($args, $context);
-    break;
-  case "let":
-    return pissed_let($args, $context);
-    break;
-  case "lambda":
-    return pissed_lambda($args, $context);
-    break;
-  default:
-    throw new Exception("Missing special form");
-    break;
-  }
+
+
+function special_form($form){
+  return ($GLOBALS['special_forms']->deref($form));
 }
+
+
 
 function sexp_eval($sexp, $context){
   switch(gettype($sexp)){
@@ -450,14 +431,14 @@ function sexp_eval($sexp, $context){
   case "array":
     $car = sexp_eval(car($sexp), $context);
     $cdr = cdr($sexp);
-    if(is_a_symbol($car) and $GLOBALS['special_forms']->contains($car)){
-      return special_form($car,$cdr,$context);
+    if(is_a_symbol($car) and special_form($car)){
+      $special = special_form($car);
+      return $special($cdr,$context);
     }
     elseif(is_a_lambda($car)){
       return pissed_call_lambda($car,$cdr,$context);
     }
     else{
-      print_r($sexp);
       return "<INVALID FUNCTION>";
     }
     break;
@@ -484,25 +465,13 @@ function sexp_eval($sexp, $context){
 
 $input = new BufferedStream(fopen('php://stdin','r'));
 
-//Initialize special forms
-$GLOBALS['special_forms'] = new Context();
-$special_forms->def(m_symbol("+"));
-$special_forms->def(m_symbol("-"));
-$special_forms->def(m_symbol("quote"));
-$special_forms->def(m_symbol("list"));
-$special_forms->def(m_symbol("def"));
-$special_forms->def(m_symbol("exit"));
-$special_forms->def(m_symbol("do"));
-$special_forms->def(m_symbol("let"));
-$special_forms->def(m_symbol("lambda"));
-
 //Initialize global defs;
 $global_context = new Context();
 $global_context->def(m_symbol("*input*"),$input);
 
 while(true){
-$sexp = sexp_read($input);
-$result = sexp_eval($sexp,$global_context);
-print sexp_print($result)."\n";
+  $sexp = sexp_read($input);
+  $result = sexp_eval($sexp,$global_context);
+  print sexp_print($result)."\n";
 }
 ?>
