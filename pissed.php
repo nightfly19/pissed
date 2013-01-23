@@ -162,7 +162,7 @@ function resolve_primative($token){
     return floatval($token);
   }
   elseif(preg_match(TOKEN_STRING,$token)){
-    return substr($token, 1,-1);
+    return stripcslashes(substr($token, 1,-1));
   }
   else{
     return Symbol::symbol($token);
@@ -332,6 +332,18 @@ function sexp_print($form, $in_list=false){
   }
 }
 
+
+function eval_in_list($list,$context){
+  if(is_null($list)){
+    return null;
+  }
+  else{
+    return cons(sexp_eval(car($list), $context), eval_in_list(cdr($list), $context));
+  }
+}
+
+
+
 def_special_form('+', function ($args, $context){
     $temp = 0;
     $pointer = $args;
@@ -410,7 +422,9 @@ def_special_form('do', function ($args, $context){
     $output = null;
     $current = $args;
     while(!is_null($current)){
-      $output = sexp_eval(car($current), $context);
+      $output = sexp_eval(
+                          eval_in_list(car($current), $context)
+                          , $context);
       $current = cdr($current);
     }
 
@@ -440,15 +454,17 @@ def_special_form('lambda', function ($args, $context){
 
 def_special_form('foreign', function ($args, $context){
     $fun = car($args);
-    $args = car(cdr($args));
-    $args = sexp_eval(cons(m_symbol('list')), $context);
+    $args = cdr($args);
     //$args = cdr($args);
     //print "mew: ".$fun."\n";
-    print sexp_print($args)."\n\n";
-    //return null;
-    //print sexp_print($args)."\n";
-    //return (call_user_func_array(__NAMESPACE__.$fun, $args));
+    //print sexp_print($args)."\n\n";
+    $args = list_to_array(eval_in_list($args, $context));
+    //print_r($args);
+    //exit(0);
+    return (call_user_func_array(__NAMESPACE__.$fun,$args));
   });
+
+
 
 def_special_form('foreign-object', function ($args, $context){
     $class = car($args);
@@ -483,6 +499,12 @@ def_special_form('foreign-deref', function($args, $context){
     $name = sexp_eval(car($args), $context);
     $key = sexp_eval(car(cdr($args)), $context);
     return $$name[$key];
+  });
+
+def_special_form('foreign-concat', function($args, $context){
+    $first = sexp_eval(car($args), $context);
+    $second = sexp_eval(car(cdr($args)), $context);
+    return "".$first.$second;
   });
 
 def_special_form('if', function ($args, $context){
