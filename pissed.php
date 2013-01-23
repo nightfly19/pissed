@@ -384,7 +384,7 @@ def_special_form('car', function($arg, $context){
   });
 
 def_special_form('quote', function ($args, $context){
-    return $args;
+    return car($args);
   });
 
 def_special_form('list', function ($args, $context){
@@ -440,8 +440,14 @@ def_special_form('lambda', function ($args, $context){
 
 def_special_form('foreign', function ($args, $context){
     $fun = car($args);
-    $args = list_to_array(cdr($args));
-    return (call_user_func_array(__NAMESPACE__.$fun, $args));
+    $args = car(cdr($args));
+    $args = sexp_eval(cons(m_symbol('list')), $context);
+    //$args = cdr($args);
+    //print "mew: ".$fun."\n";
+    print sexp_print($args)."\n\n";
+    //return null;
+    //print sexp_print($args)."\n";
+    //return (call_user_func_array(__NAMESPACE__.$fun, $args));
   });
 
 def_special_form('foreign-object', function ($args, $context){
@@ -468,6 +474,11 @@ def_special_form('foreign-var', function($args, $context){
     }
   });
 
+def_special_form('foreign-list', function($args, $context){
+    $list = sexp_eval(car($args), $context);
+    return list_to_array($list);
+  });
+
 def_special_form('foreign-deref', function($args, $context){
     $name = sexp_eval(car($args), $context);
     $key = sexp_eval(car(cdr($args)), $context);
@@ -484,6 +495,13 @@ def_special_form('if', function ($args, $context){
     else{
       return sexp_eval($b_case,$context);
     }
+  });
+
+
+
+def_special_form('eval', function ($args, $context){
+    $sexp = car($args);
+    return sexp_eval($sexp, $context);
   });
 
 def_special_form('when', function ($args, $context){
@@ -595,7 +613,7 @@ function load_file($path, $context = false){
 }
 
 
-//load_file('./pissed.lisp');
-//repl();
+load_file('./pissed.lisp');
+repl();
 
 ?>
