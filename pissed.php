@@ -82,7 +82,7 @@ class Context{
     if($this->immutable){
       return $this->parent->def($symbol, $value);
     }
-    
+
     if($this->contains($symbol)){
       //return car(setcar($this->symbols[$symbol->symbol_name], $value));
       $this->symbols[$symbol->symbol_name] = cons($value);
@@ -112,6 +112,17 @@ class Context{
 
 }
 
+
+
+class Lambda{
+  public $arg_list;
+  public $body;
+
+  function __construct($arg_list, $body){
+    $this->arg_list = $arg_list;
+    $this->body = $body;
+  }
+}
 
 
 function is_token($token){
@@ -152,10 +163,9 @@ function m_symbol($symbol_name){
 
 
 
-function is_symbol($current,$desired){
-  if(is_object($current)
-     and (get_class($current) == "Symbol")
-     and ($current == m_symbol($desired))){
+function is_a_symbol($thing){
+  if(is_object($thing)
+     and (get_class($thing) == "Symbol")){
     return true;
   }
   else{
@@ -164,6 +174,28 @@ function is_symbol($current,$desired){
 }
 
 
+
+function is_a_lambda($lambda){
+  if(is_object($lambda)
+     and (get_class($lambda) == "Lambda")){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
+
+
+
+function is_symbol($current,$desired){
+  if(is_a_symbol($current)
+     and ($current == m_symbol($desired))){
+    return true;
+  }
+  else{
+    return false;
+  }
+}
 
 function report_token($token){
   return resolve_primative($token);
@@ -249,6 +281,9 @@ function sexp_print($form, $in_list=false){
     case "Symbol":
       return $form->symbol_name." ";
       break;
+    case "Lambda":
+      return "<LAMBDA>";
+      break;
     default:
       return "<UNKOWN CLASS>";
     }
@@ -307,7 +342,7 @@ function pissed_list($args, $context){
 
 function pissed_def($args, $context){
   $symbol = car($args);
-  $value = car(cdr($args));
+  $value = sexp_eval(car(cdr($args)), $context);
   $context->def($symbol, $value);
   return $value;
 }
@@ -338,11 +373,26 @@ function pissed_let($args, $context){
   }
 
   $sub_context->immutable = true;
-  
+
   return pissed_do(cdr($args),$sub_context);
 }
 
+
 function pissed_lambda($args, $contxt){
+  return new Lambda(car($args), car(cdr($args)));
+}
+
+function pissed_call_lambda($lambda, $args, $context){
+  $r_arg_list = $lambda->arg_list;
+  $r_args = $args;
+  $zipped = null;
+  while($r_arg_list){
+    $zipped = cons(cons(car($r_arg_list), cons(car($r_args))), $zipped);
+    $r_arg_list = cdr($r_arg_list);
+    $r_args = cdr($r_args);
+  }
+
+  return pissed_let(cons($zipped, cons($lambda->body)), $context);
 }
 
 function special_form($form, $args, $context){
@@ -374,6 +424,9 @@ function special_form($form, $args, $context){
   case "let*":
     return pissed_let($args, $context);
     break;
+  case "lambda*":
+    return pissed_lambda($args, $context);
+    break;
   default:
     return "nothing at all!";
     break;
@@ -395,13 +448,16 @@ function sexp_eval($sexp, $context){
     return $sexp;
     break;
   case "array":
-    $car = car($sexp);
+    $car = sexp_eval(car($sexp), $context);
     $cdr = cdr($sexp);
-    if($GLOBALS['special_forms']->contains($car)){
+    if(is_a_symbol($car) and $GLOBALS['special_forms']->contains($car)){
       return special_form($car,$cdr,$context);
     }
+    elseif(is_a_lambda($car)){
+      return pissed_call_lambda($car,$cdr,$context);
+    }
     else{
-      return "bad array here";
+      return "<INVALID FUNCTION>";
     }
     break;
   case "object":
@@ -415,10 +471,12 @@ function sexp_eval($sexp, $context){
       }
       break;
     default:
+      return $sexp;
       break;
     }
     break;
   default:
+    return $sexp;
     break;
   }
 }
@@ -435,6 +493,7 @@ $special_forms->def(m_symbol("def*"));
 $special_forms->def(m_symbol("exit*"));
 $special_forms->def(m_symbol("do*"));
 $special_forms->def(m_symbol("let*"));
+$special_forms->def(m_symbol("lambda*"));
 //$special_forms->def(m_symbol("read*"));
 
 //Initialize global defs;
