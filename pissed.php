@@ -8,8 +8,6 @@ define('TOKEN_INTEGER', '/^\d+$/');
 define('TOKEN_FLOAT', '/^(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
 
-global $special_forms;
-
 //Prefix: There can be any ammount of whitespace at the beginning of the token.
 //Single char tokens: These can only be 1 char long ( )
 //If the first char is a " the token lasts until the another " is found that isn't preceded by \
@@ -73,7 +71,7 @@ class Context{
   public $parent;
   public $symbols;
   public $immutable;
-  
+
   function __construct($parent = null, $immutable = false){
     $this->parent = $parent;
     $this->symbols = Array();
@@ -97,7 +95,7 @@ class Context{
   function contains($symbol){
     return array_key_exists($symbol->symbol_name, $this->symbols);
   }
-  
+
   function deref($symbol){
     if($this->contains($symbol)){
       return car($this->symbols[$symbol->symbol_name]);
@@ -259,13 +257,50 @@ function sexp_print($form, $in_list=false){
   }
 }
 
-function sexp_eval(){}
+function sexp_eval($sexp, $context){
+  switch(gettype($sexp)){
+  case "NULL":
+    return null;
+    break;
+  case "integer":
+    return $sexp;
+    break;
+  case "double":
+    return $sexp;
+    break;
+  case "string":
+    return $sexp;
+    break;
+  case "array":
+    break;
+  case "object":
+    switch(get_class($sexp)){
+    case "Symbol":
+      if($GLOBALS['special_forms']->contains($sexp)){
+        return $GLOBALS['special_forms']->deref($sexp);
+      }
+      else{
+        return $context->deref($sexp);
+      }
+      break;
+    default:
+      break;
+    }
+    break;
+  default:
+    break;
+  }
+}
 
 $input = new BufferedStream(fopen('php://stdin','r'));
-print sexp_print(sexp_read($input));
 //print_r(sexp_read($input));
 $context = new Context();
-$context->def(m_symbol("hello"),"Something here");
+$GLOBALS['special_forms'] = new Context();
+$context->def(m_symbol("hello"), "Something here");
+$context->def(m_symbol("cow"), m_symbol("mooo"));
+$context->def(m_symbol("this"), "moo");
+$special_forms->def(m_symbol("hello"), "You got it!");
+print sexp_print(sexp_eval(sexp_read($input), $context));
 //print_r($context);
 //print $context->deref(m_symbol("hello"));
 ?>
