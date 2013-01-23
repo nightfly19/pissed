@@ -163,6 +163,19 @@ function resolve_primative($token){
 
 
 
+function list_to_array($list){
+  $array = Array();
+  $cur = $list;
+  while($cur){
+    array_push($array, car($cur));
+    $cur = cdr($cur);
+  };
+
+  return $array;
+}
+
+
+
 function m_symbol($symbol_name){
   return Symbol::symbol($symbol_name);
 }
@@ -338,6 +351,22 @@ def_special_form('-', function ($args, $context){
     return $temp;
   });
 
+def_special_form('cons', function ($args, $context){
+    $car = sexp_eval(car($args), $context);
+    $cdr = sexp_eval(car(cdr($args)), $context);
+    return cons($car, $cdr);
+  });
+
+def_special_form('car', function($args, $context){
+    $car = sexp_eval(car($args), $context);
+    return car($car);
+  });
+
+def_special_form('car', function($arg, $context){
+    $car = sexp_eval(car($args), $context);
+    return cdr($car);
+  });
+
 def_special_form('quote', function ($args, $context){
     return $args;
   });
@@ -372,24 +401,41 @@ def_special_form('do', function ($args, $context){
   });
 
 def_special_form('let', function ($args, $context){
-  $sub_context = new Context($context);
-  $sym_defs = car($args);
+    $sub_context = new Context($context);
+    $sym_defs = car($args);
 
-  while($sym_defs){
-    $var_def = car($sym_defs);
-    $sub_context->def(car($var_def), car(cdr($var_def)));
-    $sym_defs = cdr($sym_defs);
-  }
+    while($sym_defs){
+      $var_def = car($sym_defs);
+      $sub_context->def(car($var_def), car(cdr($var_def)));
+      $sym_defs = cdr($sym_defs);
+    }
 
-  $sub_context->immutable = true;
+    $sub_context->immutable = true;
 
-  $do = special_form(m_symbol('do'));
-  return $do(cdr($args),$sub_context);
+    $do = special_form(m_symbol('do'));
+    return $do(cdr($args),$sub_context);
   });
 
 
 def_special_form('lambda', function ($args, $context){
-  return new Lambda(car($args), cdr($args));
+    return new Lambda(car($args), cdr($args));
+  });
+
+def_special_form('foreign', function ($args, $context){
+    $fun = car($args);
+    $args = list_to_array(cdr($args));
+    return (call_user_func_array(__NAMESPACE__.$fun, $args));
+  });
+
+def_special_form('when', function ($args, $context){
+    $condition = car($args);
+    $action = car(cdr($args));
+    if(!is_null(sexp_eval($condition, $context))){
+      return sexp_eval($action, $context);
+    }
+    else{
+      return null;
+    }
   });
 
 function pissed_call_lambda($lambda, $args, $context){
