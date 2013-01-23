@@ -40,6 +40,10 @@ class BufferedStream{
   }
 
   function putc($char){array_unshift($this->buffer,$char);}
+
+  function eof(){
+    return feof($this->stream);
+  }
 }
 
 
@@ -112,7 +116,9 @@ class Context{
 
 }
 
-$GLOBALS['special_forms'] = new Context();
+$GLOBALS['special_forms']  = new Context();
+$GLOBALS['global_context'] = new Context();
+$GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
 
 function def_special_form($name,$function){
   //print "Name: ".m_symbol($name)->symbol_name."\n";
@@ -427,11 +433,24 @@ def_special_form('foreign', function ($args, $context){
     return (call_user_func_array(__NAMESPACE__.$fun, $args));
   });
 
+def_special_form('if', function ($args, $context){
+    $case = car($args);
+    $a_case = car(cdr($args));
+    $b_case = car(cdr(cdr($args)));
+    if(!is_null(sexp_eval($case, $context))){
+      return sexp_eval($a_case,$context);
+    }
+    else{
+      return sexp_eval($b_case,$context);
+    }
+  });
+
 def_special_form('when', function ($args, $context){
     $condition = car($args);
     $action = car(cdr($args));
     if(!is_null(sexp_eval($condition, $context))){
-      return sexp_eval($action, $context);
+      $do = special_form(m_symbol('do'));
+      return $do($action, $context);
     }
     else{
       return null;
@@ -509,15 +528,33 @@ function sexp_eval($sexp, $context){
   }
 }
 
-$input = new BufferedStream(fopen('php://stdin','r'));
+function repl($input = false, $context = false){
+  $input = $input ? $input : $GLOBALS['buffered_stdin'];
+  $context = $context ? $context : $GLOBALS['global_context'];
 
-//Initialize global defs;
-$global_context = new Context();
-$global_context->def(m_symbol("*input*"),$input);
-
-while(true){
-  $sexp = sexp_read($input);
-  $result = sexp_eval($sexp,$global_context);
-  print sexp_print($result)."\n";
+  while(true){
+    print "> ";
+    $sexp = sexp_read($input);
+    $result = sexp_eval($sexp,$context);
+    print sexp_print($result)."\n";
+  }
 }
+
+function load_file($path, $context = false){
+  $input = new BufferedStream(fopen($path,'r'));
+  $context = $context ? $context : $GLOBALS['global_context'];
+
+  peel_whitespace($input);
+
+  while(!$input->eof()){
+    $sexp = sexp_read($input);
+    peel_whitespace($input);
+    $result = sexp_eval($sexp,$context);
+    //print sexp_print($result)."\n";
+  }
+}
+
+load_file('./pissed.lisp');
+repl();
+
 ?>
