@@ -4,8 +4,8 @@ define('TOKEN_OP', '(');
 define('TOKEN_CP', ')');
 define('TOKEN_PATTERN',  '/^(\(|\)|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
 define('TOKEN_COMPLETE', '/^(\(|\)|"([^"]|\\")*")$/m');
-define('TOKEN_INTEGER', '/^\d+$/');
-define('TOKEN_FLOAT', '/^(\d+\.\d*|\d*\.\d+)$/');
+define('TOKEN_INTEGER', '/^-?\d+$/');
+define('TOKEN_FLOAT', '/^-?(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
 
 //Prefix: There can be any ammount of whitespace at the beginning of the token.
@@ -78,7 +78,7 @@ class Context{
     $this->immutable = $immutable;
   }
 
-  function def($symbol, $value){
+  function def($symbol, $value=null){
     if($this->immutable){
       return $this->parent->def($symbol, $value);
     }
@@ -257,6 +257,53 @@ function sexp_print($form, $in_list=false){
   }
 }
 
+function pissed_add($args, $context){
+  $temp = 0;
+  $pointer = $args;
+  while(!is_null($pointer)){
+    $temp += sexp_eval(car($pointer), $context);
+    $pointer = cdr($pointer);
+  }
+  return $temp;
+}
+
+function pissed_sub($args, $context){
+  $pointer = $args;
+  $first = true;
+  $temp = 0;
+  while(!is_null($pointer)){
+    if($first){
+      $temp = sexp_eval(car($pointer), $context);
+      $first = false;
+      if(cdr($pointer) === null){
+        return -$temp;
+      }
+    }
+    else{
+      $temp -= sexp_eval(car($pointer), $context);
+    }
+    $pointer = cdr($pointer);
+  }
+  return $temp;
+}
+
+function special_form($form, $args, $context){
+  switch($form->symbol_name){
+  case "special*":
+    return "It's really special";
+    break;
+  case "+":
+    return pissed_add($args, $context);
+    break;
+  case "-":
+    return pissed_sub($args, $context);
+    break;
+  default:
+    return "nothing at all!";
+    break;
+  }
+}
+
 function sexp_eval($sexp, $context){
   switch(gettype($sexp)){
   case "NULL":
@@ -272,12 +319,20 @@ function sexp_eval($sexp, $context){
     return $sexp;
     break;
   case "array":
+    $car = car($sexp);
+    $cdr = cdr($sexp);
+    if($GLOBALS['special_forms']->contains($car)){
+      return special_form($car,$cdr,$context);
+    }
+    else{
+      return "FAIL";
+    }
     break;
   case "object":
     switch(get_class($sexp)){
     case "Symbol":
       if($GLOBALS['special_forms']->contains($sexp)){
-        return $GLOBALS['special_forms']->deref($sexp);
+        return $sexp;
       }
       else{
         return $context->deref($sexp);
@@ -299,7 +354,8 @@ $GLOBALS['special_forms'] = new Context();
 $context->def(m_symbol("hello"), "Something here");
 $context->def(m_symbol("cow"), m_symbol("mooo"));
 $context->def(m_symbol("this"), "moo");
-$special_forms->def(m_symbol("hello"), "You got it!");
+$special_forms->def(m_symbol("+"));
+$special_forms->def(m_symbol("-"));
 print sexp_print(sexp_eval(sexp_read($input), $context));
 //print_r($context);
 //print $context->deref(m_symbol("hello"));
