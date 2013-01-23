@@ -14,17 +14,16 @@ define('TOKEN_STRING', '/^".*"$/');
 //If the first char is a " the token lasts until the another " is found that isn't preceded by \
 //Otherwise the token lasts until a whitespace character or ( or ) is found
 
-function cons($car,$cdr = null){
-  return Array($car,$cdr);
+class Cell{
+  
+  function __construct($car, $cdr){
+  }
+  public static function cons($car,$cdr=null){return Array($car,$cdr);}
+  public static function car($cell){return $cell[0];}
+  public static function cdr($cell){return $cell[1];}
+  public static function setcar($cell,$car){$cell[0] = $car; return $cell;}
+  public static function setcdr($cell,$cdr){$cell[1] = $cdr; return $cell;}
 }
-
-function car($list){return $list[0];}
-
-function cdr($list){return $list[1];}
-
-function setcar($list,$car){$list[0] = $car;return $list;}
-
-function setcdr($list,$cdr){$list[1] = $cdr;return $list;}
 
 class BufferedStream{
   public $stream;
@@ -93,8 +92,8 @@ class Context{
   function def($symbol, $value=null){
 
     if($this->contains($symbol)){
-      //return car(setcar($this->symbols[$symbol->symbol_name], $value));
-      $this->symbols[$symbol->symbol_name] = cons($value);
+      //return Cell::car(setCell::car($this->symbols[$symbol->symbol_name], $value));
+      $this->symbols[$symbol->symbol_name] = Cell::cons($value);
       return $this->deref($symbol);
     }
     else{
@@ -103,7 +102,7 @@ class Context{
         return $this->parent->def($symbol, $value);
       }
 
-      $this->symbols[$symbol->symbol_name] = cons($value);
+      $this->symbols[$symbol->symbol_name] = Cell::cons($value);
       return $this->deref($symbol);
     }
   }
@@ -114,7 +113,7 @@ class Context{
 
   function deref($symbol){
     if($this->contains($symbol)){
-      return car($this->symbols[$symbol->symbol_name]);
+      return Cell::car($this->symbols[$symbol->symbol_name]);
     }
     elseif($this->parent){
       return $this->parent->deref($symbol);
@@ -220,7 +219,7 @@ function list_read($bstream){
     return NULL;
   }
   else{
-    return cons($sexp, list_read($bstream));
+    return Cell::cons($sexp, list_read($bstream));
   }
 }
 
@@ -233,7 +232,7 @@ function sexp_read($bstream){
       return null;
     }
     else{
-      return cons($next_token, list_read($bstream));
+      return Cell::cons($next_token, list_read($bstream));
     }
   }
   else{
@@ -264,16 +263,16 @@ function sexp_print($form, $in_list=false){
     return '"'.str_replace('"','\"',$form).'"'." ";
     break;
   case "array":
-    if(gettype(cdr($form)) == "array"
-       or gettype(cdr($form)) == "NULL"){
+    if(gettype(Cell::cdr($form)) == "array"
+       or gettype(Cell::cdr($form)) == "NULL"){
       return ($in_list ? "" : "(")
-        .sexp_print(car($form))
-        .sexp_print(cdr($form), true)."";
+        .sexp_print(Cell::car($form))
+        .sexp_print(Cell::cdr($form), true)."";
     }
     else{
       return "(cons "
-        .sexp_print(car($form))." "
-        .sexp_print(cdr($form)).") ";
+        .sexp_print(Cell::car($form))." "
+        .sexp_print(Cell::cdr($form)).") ";
     }
     break;
   case "object":
@@ -283,8 +282,8 @@ function sexp_print($form, $in_list=false){
       break;
     case "Lambda":
       //return "<LAMBDA>";
-      return sexp_print(cons(Symbol::symbol("lambda")
-                             ,cons($form->arg_list
+      return sexp_print(Cell::cons(Symbol::symbol("lambda")
+                             ,Cell::cons($form->arg_list
                                    ,$form->body)));
       break;
     default:
@@ -306,8 +305,8 @@ function list_to_array($list){
   $array = Array();
   $cur = $list;
   while($cur){
-    array_push($array, car($cur));
-    $cur = cdr($cur);
+    array_push($array, Cell::car($cur));
+    $cur = Cell::cdr($cur);
   };
 
   return $array;
@@ -319,7 +318,7 @@ function eval_in_list($list,$context){
     return null;
   }
   else{
-    return cons(sexp_eval(car($list), $context), eval_in_list(cdr($list), $context));
+    return Cell::cons(sexp_eval(Cell::car($list), $context), eval_in_list(Cell::cdr($list), $context));
   }
 }
 
@@ -329,8 +328,8 @@ def_special_form('+', function ($args, $context){
     $temp = 0;
     $pointer = $args;
     while(!is_null($pointer)){
-      $temp += sexp_eval(car($pointer), $context);
-      $pointer = cdr($pointer);
+      $temp += sexp_eval(Cell::car($pointer), $context);
+      $pointer = Cell::cdr($pointer);
     }
     return $temp;
   });
@@ -346,57 +345,57 @@ def_special_form('-', function ($args, $context){
 
     while(!is_null($pointer)){
       if($first){
-        $temp = sexp_eval(car($pointer), $context);
+        $temp = sexp_eval(Cell::car($pointer), $context);
         $first = false;
-        if(cdr($pointer) === null){
+        if(Cell::cdr($pointer) === null){
           return -$temp;
         }
       }
       else{
-        $temp -= sexp_eval(car($pointer), $context);
+        $temp -= sexp_eval(Cell::car($pointer), $context);
       }
-      $pointer = cdr($pointer);
+      $pointer = Cell::cdr($pointer);
     }
     return $temp;
   });
 
 def_special_form('cons', function ($args, $context){
-    $car = sexp_eval(car($args), $context);
-    $cdr = sexp_eval(car(cdr($args)), $context);
-    return cons($car, $cdr);
+    $car = sexp_eval(Cell::car($args), $context);
+    $cdr = sexp_eval(Cell::car(Cell::cdr($args)), $context);
+    return Cell::cons($car, $cdr);
   });
 
 def_special_form('car', function($args, $context){
-    $car = sexp_eval(car($args), $context);
-    return car($car);
+    $car = sexp_eval(Cell::car($args), $context);
+    return Cell::car($car);
   });
 
 def_special_form('car', function($arg, $context){
-    $car = sexp_eval(car($args), $context);
-    return cdr($car);
+    $car = sexp_eval(Cell::car($args), $context);
+    return Cell::cdr($car);
   });
 
 def_special_form('quote', function ($args, $context){
-    return car($args);
+    return Cell::car($args);
   });
 
 def_special_form('list', function ($args, $context){
-    $car = car($args);
-    $cdr = cdr($args);
+    $car = Cell::car($args);
+    $cdr = Cell::cdr($args);
     $list = special_form(Symbol::symbol('list'));
-    return cons(sexp_eval($car, $context),
+    return Cell::cons(sexp_eval($car, $context),
                 (($cdr === null) ? null : $list($cdr, $context)));
   });
 
 def_special_form('def', function ($args, $context){
-    $symbol = car($args);
-    $value = sexp_eval(car(cdr($args)), $context);
+    $symbol = Cell::car($args);
+    $value = sexp_eval(Cell::car(Cell::cdr($args)), $context);
     $context->def($symbol, $value);
     return $value;
   });
 
 def_special_form('exit', function ($args, $context){
-    exit(car($args));
+    exit(Cell::car($args));
   });
 
 def_special_form('do', function ($args, $context){
@@ -404,9 +403,9 @@ def_special_form('do', function ($args, $context){
     $current = $args;
     while(!is_null($current)){
       $output = sexp_eval(
-                          eval_in_list(car($current), $context)
+                          eval_in_list(Cell::car($current), $context)
                           , $context);
-      $current = cdr($current);
+      $current = Cell::cdr($current);
     }
 
     return $output;
@@ -414,29 +413,29 @@ def_special_form('do', function ($args, $context){
 
 def_special_form('let', function ($args, $context){
     $sub_context = new Context($context);
-    $sym_defs = car($args);
+    $sym_defs = Cell::car($args);
 
     while($sym_defs){
-      $var_def = car($sym_defs);
-      $sub_context->def(car($var_def), car(cdr($var_def)));
-      $sym_defs = cdr($sym_defs);
+      $var_def = Cell::car($sym_defs);
+      $sub_context->def(Cell::car($var_def), Cell::car(Cell::cdr($var_def)));
+      $sym_defs = Cell::cdr($sym_defs);
     }
 
     $sub_context->immutable = true;
 
     $do = special_form(Symbol::symbol('do'));
-    return $do(cdr($args),$sub_context);
+    return $do(Cell::cdr($args),$sub_context);
   });
 
 
 def_special_form('lambda', function ($args, $context){
-    return new Lambda(car($args), cdr($args));
+    return new Lambda(Cell::car($args), Cell::cdr($args));
   });
 
 def_special_form('foreign', function ($args, $context){
-    $fun = car($args);
-    $args = cdr($args);
-    //$args = cdr($args);
+    $fun = Cell::car($args);
+    $args = Cell::cdr($args);
+    //$args = Cell::cdr($args);
     //print "mew: ".$fun."\n";
     //print sexp_print($args)."\n\n";
     $args = list_to_array(eval_in_list($args, $context));
@@ -448,21 +447,21 @@ def_special_form('foreign', function ($args, $context){
 
 
 def_special_form('foreign-object', function ($args, $context){
-    $class = car($args);
-    $args = list_to_array(cdr($args));
+    $class = Cell::car($args);
+    $args = list_to_array(Cell::cdr($args));
     $reflect = new ReflectionClass($class);
     return $reflect->newInstanceArgs($args);
   });
 
 def_special_form('foreign-global', function ($args, $context){
-    $name = sexp_eval(car($args), $context);
+    $name = sexp_eval(Cell::car($args), $context);
     return $GLOBALS[$name];
   });
 
 def_special_form('foreign-var', function($args, $context){
-    $name = sexp_eval(car($args), $context);
-    $value = sexp_eval(car(cdr($args)), $context);
-    if(!is_null(cdr($args))){
+    $name = sexp_eval(Cell::car($args), $context);
+    $value = sexp_eval(Cell::car(Cell::cdr($args)), $context);
+    if(!is_null(Cell::cdr($args))){
       $$name = $value;
       return $value;
     }
@@ -472,26 +471,26 @@ def_special_form('foreign-var', function($args, $context){
   });
 
 def_special_form('foreign-list', function($args, $context){
-    $list = sexp_eval(car($args), $context);
+    $list = sexp_eval(Cell::car($args), $context);
     return list_to_array($list);
   });
 
 def_special_form('foreign-deref', function($args, $context){
-    $name = sexp_eval(car($args), $context);
-    $key = sexp_eval(car(cdr($args)), $context);
+    $name = sexp_eval(Cell::car($args), $context);
+    $key = sexp_eval(Cell::car(Cell::cdr($args)), $context);
     return $$name[$key];
   });
 
 def_special_form('foreign-concat', function($args, $context){
-    $first = sexp_eval(car($args), $context);
-    $second = sexp_eval(car(cdr($args)), $context);
+    $first = sexp_eval(Cell::car($args), $context);
+    $second = sexp_eval(Cell::car(Cell::cdr($args)), $context);
     return "".$first.$second;
   });
 
 def_special_form('if', function ($args, $context){
-    $case = car($args);
-    $a_case = car(cdr($args));
-    $b_case = car(cdr(cdr($args)));
+    $case = Cell::car($args);
+    $a_case = Cell::car(Cell::cdr($args));
+    $b_case = Cell::car(Cell::cdr(Cell::cdr($args)));
     if(!is_null(sexp_eval($case, $context))){
       return sexp_eval($a_case,$context);
     }
@@ -503,13 +502,13 @@ def_special_form('if', function ($args, $context){
 
 
 def_special_form('eval', function ($args, $context){
-    $sexp = car($args);
+    $sexp = Cell::car($args);
     return sexp_eval($sexp, $context);
   });
 
 def_special_form('when', function ($args, $context){
-    $condition = car($args);
-    $action = car(cdr($args));
+    $condition = Cell::car($args);
+    $action = Cell::car(Cell::cdr($args));
     if(!is_null(sexp_eval($condition, $context))){
       $do = special_form(Symbol::symbol('do'));
       return $do($action, $context);
@@ -524,13 +523,13 @@ function pissed_call_lambda($lambda, $args, $context){
   $r_args = $args;
   $zipped = null;
   while($r_arg_list){
-    $zipped = cons(cons(car($r_arg_list), cons(car($r_args))), $zipped);
-    $r_arg_list = cdr($r_arg_list);
-    $r_args = cdr($r_args);
+    $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list), Cell::cons(Cell::car($r_args))), $zipped);
+    $r_arg_list = Cell::cdr($r_arg_list);
+    $r_args = Cell::cdr($r_args);
   }
 
   $let = special_form(Symbol::symbol('let'));
-  return $let(cons($zipped, $lambda->body), $context);
+  return $let(Cell::cons($zipped, $lambda->body), $context);
 }
 
 
@@ -556,8 +555,8 @@ function sexp_eval($sexp, $context){
     return $sexp;
     break;
   case "array":
-    $car = sexp_eval(car($sexp), $context);
-    $cdr = cdr($sexp);
+    $car = sexp_eval(Cell::car($sexp), $context);
+    $cdr = Cell::cdr($sexp);
     if(Symbol::is_a($car) and special_form($car)){
       $special = special_form($car);
       return $special($cdr,$context);
