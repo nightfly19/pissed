@@ -271,6 +271,11 @@ function pissed_sub($args, $context){
   $pointer = $args;
   $first = true;
   $temp = 0;
+
+  if($pointer === null){
+    throw new Exception("Not enough args to -");
+  }
+  
   while(!is_null($pointer)){
     if($first){
       $temp = sexp_eval(car($pointer), $context);
