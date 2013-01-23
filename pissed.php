@@ -275,7 +275,7 @@ function pissed_sub($args, $context){
   if($pointer === null){
     throw new Exception("Not enough args to -");
   }
-  
+
   while(!is_null($pointer)){
     if($first){
       $temp = sexp_eval(car($pointer), $context);
@@ -292,6 +292,17 @@ function pissed_sub($args, $context){
   return $temp;
 }
 
+function pissed_quote($args, $context){
+  return $args;
+}
+
+function pissed_list($args, $context){
+  $car = car($args);
+  $cdr = cdr($args);
+  return cons(sexp_eval($car, $context),
+              (($cdr === null) ? null : pissed_list($cdr, $context)));
+}
+
 function special_form($form, $args, $context){
   switch($form->symbol_name){
   case "special*":
@@ -302,6 +313,12 @@ function special_form($form, $args, $context){
     break;
   case "-":
     return pissed_sub($args, $context);
+    break;
+  case "quote":
+    return pissed_quote($args, $context);
+    break;
+  case "list":
+    return pissed_list($args, $context);
     break;
   default:
     return "nothing at all!";
@@ -361,6 +378,8 @@ $context->def(m_symbol("cow"), m_symbol("mooo"));
 $context->def(m_symbol("this"), "moo");
 $special_forms->def(m_symbol("+"));
 $special_forms->def(m_symbol("-"));
+$special_forms->def(m_symbol("quote"));
+$special_forms->def(m_symbol("list"));
 print sexp_print(sexp_eval(sexp_read($input), $context));
 //print_r($context);
 //print $context->deref(m_symbol("hello"));
