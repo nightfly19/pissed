@@ -316,6 +316,35 @@ function pissed_exit($args, $context){
   exit(car($args));
 }
 
+function pissed_do($args, $context){
+  $output = null;
+  $current = $args;
+  while(!is_null($current)){
+    $output = sexp_eval(car($current), $context);
+    $current = cdr($current);
+  }
+
+  return $output;
+}
+
+function pissed_let($args, $context){
+  $sub_context = new Context($context);
+  $sym_defs = car($args);
+
+  while($sym_defs){
+    $var_def = car($sym_defs);
+    $sub_context->def(car($var_def), car(cdr($var_def)));
+    $sym_defs = cdr($sym_defs);
+  }
+
+  $sub_context->immutable = true;
+  
+  return pissed_do(cdr($args),$sub_context);
+}
+
+function pissed_lambda($args, $contxt){
+}
+
 function special_form($form, $args, $context){
   switch($form->symbol_name){
   case "special*":
@@ -338,6 +367,12 @@ function special_form($form, $args, $context){
     break;
   case "exit*":
     return pissed_exit($args, $context);
+    break;
+  case "do*":
+    return pissed_do($args, $context);
+    break;
+  case "let*":
+    return pissed_let($args, $context);
     break;
   default:
     return "nothing at all!";
@@ -366,7 +401,7 @@ function sexp_eval($sexp, $context){
       return special_form($car,$cdr,$context);
     }
     else{
-      return "FAIL";
+      return "bad array here";
     }
     break;
   case "object":
@@ -397,6 +432,9 @@ $special_forms->def(m_symbol("-"));
 $special_forms->def(m_symbol("quote*"));
 $special_forms->def(m_symbol("list*"));
 $special_forms->def(m_symbol("def*"));
+$special_forms->def(m_symbol("exit*"));
+$special_forms->def(m_symbol("do*"));
+$special_forms->def(m_symbol("let*"));
 //$special_forms->def(m_symbol("read*"));
 
 //Initialize global defs;
