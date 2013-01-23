@@ -297,9 +297,17 @@ function sexp_print($form, $in_list=false){
     return '"'.str_replace('"','\"',$form).'"'." ";
     break;
   case "array":
-    return ($in_list ? "" : "(")
-      .sexp_print(car($form))
-      .sexp_print(cdr($form), true)."";
+    if(gettype(cdr($form)) == "array"
+       or gettype(cdr($form)) == "NULL"){
+      return ($in_list ? "" : "(")
+        .sexp_print(car($form))
+        .sexp_print(cdr($form), true)."";
+    }
+    else{
+      return "(cons "
+        .sexp_print(car($form))." "
+        .sexp_print(cdr($form)).") ";
+    }
     break;
   case "object":
     switch(get_class($form)){
@@ -380,8 +388,9 @@ def_special_form('quote', function ($args, $context){
 def_special_form('list', function ($args, $context){
     $car = car($args);
     $cdr = cdr($args);
+    $list = special_form(m_symbol('list'));
     return cons(sexp_eval($car, $context),
-                (($cdr === null) ? null : pissed_list($cdr, $context)));
+                (($cdr === null) ? null : $list($cdr, $context)));
   });
 
 def_special_form('def', function ($args, $context){
@@ -550,7 +559,6 @@ function load_file($path, $context = false){
     $sexp = sexp_read($input);
     peel_whitespace($input);
     $result = sexp_eval($sexp,$context);
-    //print sexp_print($result)."\n";
   }
 }
 
