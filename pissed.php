@@ -189,27 +189,27 @@ function read_token($bstream){
 
 
 
-function read_list($bstream){
-  $sexp = read_sexp($bstream);
-  if(is_symbol($sexp,TOKEN_CP)){
+function list_read($bstream){
+  $sexp = sexp_read($bstream);
+  if(is_symbol($sexp, TOKEN_CP)){
     return NULL;
   }
   else{
-    return cons($sexp,read_list($bstream));
+    return cons($sexp, list_read($bstream));
   }
 }
 
 
 
-function read_sexp($bstream){
+function sexp_read($bstream){
   $token = read_token($bstream);
   if(is_symbol($token, TOKEN_OP)){
-    $next_token = read_sexp($bstream);
+    $next_token = sexp_read($bstream);
     if(is_symbol($next_token, TOKEN_CP)){
       return null;
     }
     else{
-      return cons($next_token,read_list($bstream));
+      return cons($next_token, list_read($bstream));
     }
   }
   else{
@@ -220,10 +220,7 @@ function read_sexp($bstream){
 
 
 //Print stuff
-
-
-function form_print($form, $in_list=false){
-
+function sexp_print($form, $in_list=false){
   switch(gettype($form)){
   case "NULL":
     if($in_list){
@@ -244,8 +241,8 @@ function form_print($form, $in_list=false){
     break;
   case "array":
     return ($in_list ? "" : "(")
-      .form_print(car($form))
-      .form_print(cdr($form), true)."";
+      .sexp_print(car($form))
+      .sexp_print(cdr($form), true)."";
     break;
   case "object":
     switch(get_class($form)){
@@ -262,14 +259,13 @@ function form_print($form, $in_list=false){
   }
 }
 
-
-
+function sexp_eval(){}
 
 $input = new BufferedStream(fopen('php://stdin','r'));
-//print form_print((read_sexp($input)));
-//print_r(read_sexp($input));
+print sexp_print(sexp_read($input));
+//print_r(sexp_read($input));
 $context = new Context();
 $context->def(m_symbol("hello"),"Something here");
 //print_r($context);
-print $context->deref(m_symbol("hello"));
+//print $context->deref(m_symbol("hello"));
 ?>
