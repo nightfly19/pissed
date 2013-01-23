@@ -282,7 +282,10 @@ function sexp_print($form, $in_list=false){
       return $form->symbol_name." ";
       break;
     case "Lambda":
-      return "<LAMBDA>";
+      //return "<LAMBDA>";
+      return sexp_print(cons(m_symbol("lambda")
+                             ,cons($form->arg_list
+                                   ,$form->body)));
       break;
     default:
       return "<UNKOWN CLASS>";
@@ -379,7 +382,7 @@ function pissed_let($args, $context){
 
 
 function pissed_lambda($args, $contxt){
-  return new Lambda(car($args), car(cdr($args)));
+  return new Lambda(car($args), cdr($args));
 }
 
 function pissed_call_lambda($lambda, $args, $context){
@@ -392,7 +395,7 @@ function pissed_call_lambda($lambda, $args, $context){
     $r_args = cdr($r_args);
   }
 
-  return pissed_let(cons($zipped, cons($lambda->body)), $context);
+  return pissed_let(cons($zipped, $lambda->body), $context);
 }
 
 function special_form($form, $args, $context){
@@ -454,6 +457,7 @@ function sexp_eval($sexp, $context){
       return pissed_call_lambda($car,$cdr,$context);
     }
     else{
+      print_r($sexp);
       return "<INVALID FUNCTION>";
     }
     break;
