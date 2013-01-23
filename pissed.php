@@ -82,13 +82,15 @@ class Context{
     if($this->immutable){
       return $this->parent->def($symbol, $value);
     }
-
+    
     if($this->contains($symbol)){
-      return car(setcar($this->symbols[$symbol], $value));
+      //return car(setcar($this->symbols[$symbol->symbol_name], $value));
+      $this->symbols[$symbol->symbol_name] = cons($value);
+      return $this->deref($symbol);
     }
     else{
       $this->symbols[$symbol->symbol_name] = cons($value);
-      return car($this->symbols[$symbol->symbol_name]);
+      return $this->deref($symbol);
     }
   }
 
@@ -303,6 +305,17 @@ function pissed_list($args, $context){
               (($cdr === null) ? null : pissed_list($cdr, $context)));
 }
 
+function pissed_def($args, $context){
+  $symbol = car($args);
+  $value = car(cdr($args));
+  $context->def($symbol, $value);
+  return $value;
+}
+
+function pissed_exit($args, $context){
+  exit(car($args));
+}
+
 function special_form($form, $args, $context){
   switch($form->symbol_name){
   case "special*":
@@ -314,11 +327,17 @@ function special_form($form, $args, $context){
   case "-":
     return pissed_sub($args, $context);
     break;
-  case "quote":
+  case "quote*":
     return pissed_quote($args, $context);
     break;
-  case "list":
+  case "list*":
     return pissed_list($args, $context);
+    break;
+  case "def*":
+    return pissed_def($args, $context);
+    break;
+  case "exit*":
+    return pissed_exit($args, $context);
     break;
   default:
     return "nothing at all!";
@@ -370,17 +389,24 @@ function sexp_eval($sexp, $context){
 }
 
 $input = new BufferedStream(fopen('php://stdin','r'));
-//print_r(sexp_read($input));
-$context = new Context();
+
+//Initialize special forms
 $GLOBALS['special_forms'] = new Context();
-$context->def(m_symbol("hello"), "Something here");
-$context->def(m_symbol("cow"), m_symbol("mooo"));
-$context->def(m_symbol("this"), "moo");
 $special_forms->def(m_symbol("+"));
 $special_forms->def(m_symbol("-"));
-$special_forms->def(m_symbol("quote"));
-$special_forms->def(m_symbol("list"));
-print sexp_print(sexp_eval(sexp_read($input), $context));
-//print_r($context);
-//print $context->deref(m_symbol("hello"));
+$special_forms->def(m_symbol("quote*"));
+$special_forms->def(m_symbol("list*"));
+$special_forms->def(m_symbol("def*"));
+//$special_forms->def(m_symbol("read*"));
+
+//Initialize global defs;
+$global_context = new Context();
+$global_context->def(m_symbol("felix"), "perfect");
+$global_context->def(m_symbol("*input*"),$input);
+
+while(true){
+$sexp = sexp_read($input);
+$result = sexp_eval($sexp,$global_context);
+print sexp_print($result)."\n";
+}
 ?>
