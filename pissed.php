@@ -83,9 +83,6 @@ class Context{
   }
 
   function def($symbol, $value=null){
-    if($this->immutable){
-      return $this->parent->def($symbol, $value);
-    }
 
     if($this->contains($symbol)){
       //return car(setcar($this->symbols[$symbol->symbol_name], $value));
@@ -93,6 +90,11 @@ class Context{
       return $this->deref($symbol);
     }
     else{
+      //Immutable contexts can only have existing bindings changed, not create new bindings.
+      if($this->immutable){
+        return $this->parent->def($symbol, $value);
+      }
+
       $this->symbols[$symbol->symbol_name] = cons($value);
       return $this->deref($symbol);
     }
@@ -440,6 +442,18 @@ def_special_form('foreign', function ($args, $context){
     $fun = car($args);
     $args = list_to_array(cdr($args));
     return (call_user_func_array(__NAMESPACE__.$fun, $args));
+  });
+
+def_special_form('foreign-object', function ($args, $context){
+    $class = car($args);
+    $args = list_to_array(cdr($args));
+    $reflect = new ReflectionClass($class);
+    return $reflect->newInstanceArgs($args);
+  });
+
+def_special_form('foreign-global', function ($args, $context){
+    $name = sexp_eval(car($args), $context);
+    return $GLOBALS[$name];
   });
 
 def_special_form('if', function ($args, $context){
