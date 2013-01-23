@@ -2,8 +2,9 @@
 
 define('TOKEN_OP', '(');
 define('TOKEN_CP', ')');
-define('TOKEN_PATTERN',  '/^(\(|\)|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
-define('TOKEN_COMPLETE', '/^(\(|\)|"([^"]|\\")*")$/m');
+define('TOKEN_BACKTICK', '`');
+define('TOKEN_PATTERN',  '/^(\(|\)|`|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
+define('TOKEN_COMPLETE', '/^(\(|\)|`|"([^"]|\\")*")$/m');
 define('TOKEN_INTEGER', '/^-?\d+$/');
 define('TOKEN_FLOAT', '/^-?(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
@@ -67,8 +68,15 @@ class Symbol{
     }
   }
 
-}
+  public static function is_a($thing){
+    return ((is_object($thing) and (get_class($thing) == "Symbol"))) ? true : false;
+  }
 
+  public static function is($current,$desired){
+    return ((Symbol::is_a($current) and ($current == Symbol::symbol($desired)))) ? true : false;
+  }
+
+}
 
 
 class Context{
@@ -118,15 +126,6 @@ class Context{
 
 }
 
-$GLOBALS['special_forms']  = new Context();
-$GLOBALS['global_context'] = new Context();
-$GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
-
-function def_special_form($name,$function){
-  //print "Name: ".m_symbol($name)->symbol_name."\n";
-  //print_r($GLOBALS['special_forms']);
-  return $GLOBALS['special_forms']->def(m_symbol($name), $function);
-}
 
 class Lambda{
   public $arg_list;
@@ -138,11 +137,23 @@ class Lambda{
   }
 }
 
+$GLOBALS['special_forms']  = new Context();
+$GLOBALS['global_context'] = new Context();
+$GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
+
+function def_special_form($name,$function){
+  //print "Name: ".Symbol::symbol($name)->symbol_name."\n";
+  //print_r($GLOBALS['special_forms']);
+  return $GLOBALS['special_forms']->def(Symbol::symbol($name), $function);
+}
+
+
+
+//Reader section
 
 function is_token($token){
   return (preg_match(TOKEN_PATTERN, $token) and !preg_match('/[\n\r]$/',$token));
 }
-
 
 
 function peel_whitespace($bstream){
@@ -151,7 +162,6 @@ function peel_whitespace($bstream){
   elseif(preg_match('/\s/',"$byte")){ peel_whitespace($bstream);}
   else{$bstream->putc($byte);}
 }
-
 
 
 function resolve_primative($token){
@@ -171,37 +181,6 @@ function resolve_primative($token){
 
 
 
-function list_to_array($list){
-  $array = Array();
-  $cur = $list;
-  while($cur){
-    array_push($array, car($cur));
-    $cur = cdr($cur);
-  };
-
-  return $array;
-}
-
-
-
-function m_symbol($symbol_name){
-  return Symbol::symbol($symbol_name);
-}
-
-
-
-function is_a_symbol($thing){
-  if(is_object($thing)
-     and (get_class($thing) == "Symbol")){
-    return true;
-  }
-  else{
-    return false;
-  }
-}
-
-
-
 function is_a_lambda($lambda){
   if(is_object($lambda)
      and (get_class($lambda) == "Lambda")){
@@ -214,20 +193,9 @@ function is_a_lambda($lambda){
 
 
 
-function is_symbol($current,$desired){
-  if(is_a_symbol($current)
-     and ($current == m_symbol($desired))){
-    return true;
-  }
-  else{
-    return false;
-  }
-}
-
 function report_token($token){
   return resolve_primative($token);
 }
-
 
 
 function read_token($bstream){
@@ -246,11 +214,9 @@ function read_token($bstream){
 }
 
 
-
-
 function list_read($bstream){
   $sexp = sexp_read($bstream);
-  if(is_symbol($sexp, TOKEN_CP)){
+  if(Symbol::is($sexp, TOKEN_CP)){
     return NULL;
   }
   else{
@@ -259,12 +225,11 @@ function list_read($bstream){
 }
 
 
-
 function sexp_read($bstream){
   $token = read_token($bstream);
-  if(is_symbol($token, TOKEN_OP)){
+  if(Symbol::is($token, TOKEN_OP)){
     $next_token = sexp_read($bstream);
-    if(is_symbol($next_token, TOKEN_CP)){
+    if(Symbol::is($next_token, TOKEN_CP)){
       return null;
     }
     else{
@@ -318,7 +283,7 @@ function sexp_print($form, $in_list=false){
       break;
     case "Lambda":
       //return "<LAMBDA>";
-      return sexp_print(cons(m_symbol("lambda")
+      return sexp_print(cons(Symbol::symbol("lambda")
                              ,cons($form->arg_list
                                    ,$form->body)));
       break;
@@ -330,6 +295,22 @@ function sexp_print($form, $in_list=false){
     return "<OTHER THING>\n";
     break;
   }
+}
+
+
+//Runtime stuff
+
+
+
+function list_to_array($list){
+  $array = Array();
+  $cur = $list;
+  while($cur){
+    array_push($array, car($cur));
+    $cur = cdr($cur);
+  };
+
+  return $array;
 }
 
 
@@ -402,7 +383,7 @@ def_special_form('quote', function ($args, $context){
 def_special_form('list', function ($args, $context){
     $car = car($args);
     $cdr = cdr($args);
-    $list = special_form(m_symbol('list'));
+    $list = special_form(Symbol::symbol('list'));
     return cons(sexp_eval($car, $context),
                 (($cdr === null) ? null : $list($cdr, $context)));
   });
@@ -443,7 +424,7 @@ def_special_form('let', function ($args, $context){
 
     $sub_context->immutable = true;
 
-    $do = special_form(m_symbol('do'));
+    $do = special_form(Symbol::symbol('do'));
     return $do(cdr($args),$sub_context);
   });
 
@@ -530,7 +511,7 @@ def_special_form('when', function ($args, $context){
     $condition = car($args);
     $action = car(cdr($args));
     if(!is_null(sexp_eval($condition, $context))){
-      $do = special_form(m_symbol('do'));
+      $do = special_form(Symbol::symbol('do'));
       return $do($action, $context);
     }
     else{
@@ -548,7 +529,7 @@ function pissed_call_lambda($lambda, $args, $context){
     $r_args = cdr($r_args);
   }
 
-  $let = special_form(m_symbol('let'));
+  $let = special_form(Symbol::symbol('let'));
   return $let(cons($zipped, $lambda->body), $context);
 }
 
@@ -577,7 +558,7 @@ function sexp_eval($sexp, $context){
   case "array":
     $car = sexp_eval(car($sexp), $context);
     $cdr = cdr($sexp);
-    if(is_a_symbol($car) and special_form($car)){
+    if(Symbol::is_a($car) and special_form($car)){
       $special = special_form($car);
       return $special($cdr,$context);
     }
