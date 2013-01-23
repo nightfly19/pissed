@@ -456,6 +456,24 @@ def_special_form('foreign-global', function ($args, $context){
     return $GLOBALS[$name];
   });
 
+def_special_form('foreign-var', function($args, $context){
+    $name = sexp_eval(car($args), $context);
+    $value = sexp_eval(car(cdr($args)), $context);
+    if(!is_null(cdr($args))){
+      $$name = $value;
+      return $value;
+    }
+    else{
+      return $$name;
+    }
+  });
+
+def_special_form('foreign-deref', function($args, $context){
+    $name = sexp_eval(car($args), $context);
+    $key = sexp_eval(car(cdr($args)), $context);
+    return $$name[$key];
+  });
+
 def_special_form('if', function ($args, $context){
     $case = car($args);
     $a_case = car(cdr($args));
@@ -576,7 +594,8 @@ function load_file($path, $context = false){
   }
 }
 
-load_file('./pissed.lisp');
-repl();
+
+//load_file('./pissed.lisp');
+//repl();
 
 ?>
