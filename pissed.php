@@ -24,6 +24,7 @@ $GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
 
 //Classes
 
+
 abstract class LispObject{
   abstract public function lisp_print();
 }
@@ -103,6 +104,72 @@ class Symbol extends LispObject{
 }
 
 
+class Lambda extends Applicible{
+  public $arg_list;
+  public $body;
+
+  function __construct($arg_list, $body){
+    $this->arg_list = $arg_list;
+    $this->body = $body;
+  }
+
+
+  function lisp_eval($args, $context){
+    $r_arg_list = $this->arg_list;
+    $r_args = $args;
+    $zipped = null;
+    while($r_arg_list){
+      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
+                                      Cell::cons(Cell::car($r_args))), $zipped);
+      $r_arg_list = Cell::cdr($r_arg_list);
+      $r_args = Cell::cdr($r_args);
+    }
+
+    $let = special_form(Symbol::symbol('let'));
+    return $let(Cell::cons($zipped, $this->body), $context);
+  }
+
+  public function lisp_print(){
+    return sexp_print(Cell::cons(Symbol::symbol("lambda")
+                                 ,Cell::cons($this->arg_list
+                                             ,$this->body)));
+  }
+}
+
+
+class Macro extends Applicible{
+  public $arg_list;
+  public $body;
+
+  function __construct($arg_list, $body){
+    $this->arg_list = $arg_list;
+    $this->body = $body;
+  }
+
+
+  function lisp_eval($args, $context){
+    $r_arg_list = $this->arg_list;
+    $r_args = $args;
+    $zipped = null;
+    while($r_arg_list){
+      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
+                                      Cell::cons(Cell::car($r_args))), $zipped);
+      $r_arg_list = Cell::cdr($r_arg_list);
+      $r_args = Cell::cdr($r_args);
+    }
+
+    $let = special_form(Symbol::symbol('let'));
+    return $let(Cell::cons($zipped, $this->body), $context);
+  }
+
+  public function lisp_print(){
+    return sexp_print(Cell::cons(Symbol::symbol("macro")
+                                 ,Cell::cons($this->arg_list
+                                             ,$this->body)));
+  }
+}
+
+
 class Context{
   public $parent;
   public $symbols;
@@ -144,71 +211,6 @@ class Context{
     else{
       return null;
     }
-  }
-}
-
-
-class Lambda extends Applicible{
-  public $arg_list;
-  public $body;
-
-  function __construct($arg_list, $body){
-    $this->arg_list = $arg_list;
-    $this->body = $body;
-  }
-
-
-  function lisp_eval($args, $context){
-    $r_arg_list = $this->arg_list;
-    $r_args = $args;
-    $zipped = null;
-    while($r_arg_list){
-      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
-                                      Cell::cons(Cell::car($r_args))), $zipped);
-      $r_arg_list = Cell::cdr($r_arg_list);
-      $r_args = Cell::cdr($r_args);
-    }
-
-    $let = special_form(Symbol::symbol('let'));
-    return $let(Cell::cons($zipped, $this->body), $context);
-  }
-
-  public function lisp_print(){
-    return sexp_print(Cell::cons(Symbol::symbol("lambda")
-                                 ,Cell::cons($this->arg_list
-                                             ,$this->body)));
-  }
-}
-
-class Macro extends Applicible{
-  public $arg_list;
-  public $body;
-
-  function __construct($arg_list, $body){
-    $this->arg_list = $arg_list;
-    $this->body = $body;
-  }
-
-
-  function lisp_eval($args, $context){
-    $r_arg_list = $this->arg_list;
-    $r_args = $args;
-    $zipped = null;
-    while($r_arg_list){
-      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
-                                      Cell::cons(Cell::car($r_args))), $zipped);
-      $r_arg_list = Cell::cdr($r_arg_list);
-      $r_args = Cell::cdr($r_args);
-    }
-
-    $let = special_form(Symbol::symbol('let'));
-    return $let(Cell::cons($zipped, $this->body), $context);
-  }
-
-  public function lisp_print(){
-    return sexp_print(Cell::cons(Symbol::symbol("macro")
-                                 ,Cell::cons($this->arg_list
-                                             ,$this->body)));
   }
 }
 
@@ -326,9 +328,9 @@ function list_to_array($list){
 
 
 function eval_in_list($list,$context){
-  return (is_null($list)) ? null :
-    Cell::cons(sexp_eval(Cell::car($list), $context),
-               eval_in_list(Cell::cdr($list), $context));
+  return (is_null($list) ? null :
+          Cell::cons(sexp_eval(Cell::car($list), $context),
+                     eval_in_list(Cell::cdr($list), $context)));
 }
 
 
@@ -534,9 +536,11 @@ def_special_form('do', function ($args, $context){
     $output = null;
     $current = $args;
     while(!is_null($current)){
-      $output = sexp_eval(
-                          eval_in_list(Cell::car($current), $context)
-                          , $context);
+      $form = Cell::car($current);
+      if(is_a($form, 'Cell')){
+        $form = eval_in_list($form, $context);
+      }
+      $output = sexp_eval($form, $context);
       $current = Cell::cdr($current);
     }
     return $output;
@@ -545,7 +549,6 @@ def_special_form('do', function ($args, $context){
 def_special_form('let', function ($args, $context){
     $sub_context = new Context($context);
     $sym_defs = Cell::car($args);
-
     while($sym_defs){
       $var_def = Cell::car($sym_defs);
       $sub_context->def(Cell::car($var_def), Cell::car(Cell::cdr($var_def)));
