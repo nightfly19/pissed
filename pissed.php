@@ -8,6 +8,7 @@ define('TOKEN_CP', ')');
 define('TOKEN_BACKTICK', '`');
 define('TOKEN_PATTERN',  '/^(\(|\)|`|"([^"]|\\")*|[^\s\(\)\"]+)$/s');
 define('TOKEN_COMPLETE', '/^(\(|\)|`|"([^"]|\\")*")$/m');
+define('TOKEN_COMMENT', '/^;.*[\n\r]$/m');
 define('TOKEN_INTEGER', '/^-?\d+$/');
 define('TOKEN_FLOAT', '/^-?(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
@@ -48,9 +49,6 @@ class Cell{
   public static function setcar($cell,$car){$cell->_car = $car;return $cell;}
   public static function setcdr($cell,$cdr){$cell->_cdr = $cdr;return $cdr;}
 
-  public static function is_a($cell){
-    return (is_object($cell) and get_class($cell) == "Cell") ? true : false;
-  }
 }
 
 
@@ -95,12 +93,9 @@ class Symbol{
     }
   }
 
-  public static function is_a($thing){
-    return ((is_object($thing) and (get_class($thing) == "Symbol"))) ? true : false;
-  }
 
   public static function is($current,$desired){
-    return ((Symbol::is_a($current) and ($current == Symbol::symbol($desired)))) ? true : false;
+    return ((is_a($current, 'Symbol') and ($current == Symbol::symbol($desired)))) ? true : false;
   }
 }
 
@@ -150,7 +145,12 @@ class Context{
 }
 
 
-class Lambda{
+abstract class Applicible{
+  abstract public function lisp_eval($args, $context);
+}
+
+
+class Lambda extends Applicible{
   public $arg_list;
   public $body;
 
@@ -159,9 +159,46 @@ class Lambda{
     $this->body = $body;
   }
 
-  public static function is_a($lambda){
-    return (is_object($lambda)
-            and (get_class($lambda) == "Lambda")) ? true : false;
+
+  function lisp_eval($args, $context){
+    $r_arg_list = $this->arg_list;
+    $r_args = $args;
+    $zipped = null;
+    while($r_arg_list){
+      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
+                                      Cell::cons(Cell::car($r_args))), $zipped);
+      $r_arg_list = Cell::cdr($r_arg_list);
+      $r_args = Cell::cdr($r_args);
+    }
+
+    $let = special_form(Symbol::symbol('let'));
+    return $let(Cell::cons($zipped, $this->body), $context);
+  }
+}
+
+class Macro extends Applicible{
+  public $arg_list;
+  public $body;
+
+  function __construct($arg_list, $body){
+    $this->arg_list = $arg_list;
+    $this->body = $body;
+  }
+
+
+  function lisp_eval($args, $context){
+    $r_arg_list = $this->arg_list;
+    $r_args = $args;
+    $zipped = null;
+    while($r_arg_list){
+      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
+                                      Cell::cons(Cell::car($r_args))), $zipped);
+      $r_arg_list = Cell::cdr($r_arg_list);
+      $r_args = Cell::cdr($r_args);
+    }
+
+    $let = special_form(Symbol::symbol('let'));
+    return $let(Cell::cons($zipped, $this->body), $context);
   }
 }
 
@@ -263,21 +300,6 @@ function eval_in_list($list,$context){
 }
 
 
-function pissed_call_lambda($lambda, $args, $context){
-  $r_arg_list = $lambda->arg_list;
-  $r_args = $args;
-  $zipped = null;
-  while($r_arg_list){
-    $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list), Cell::cons(Cell::car($r_args))), $zipped);
-    $r_arg_list = Cell::cdr($r_arg_list);
-    $r_args = Cell::cdr($r_args);
-  }
-
-  $let = special_form(Symbol::symbol('let'));
-  return $let(Cell::cons($zipped, $lambda->body), $context);
-}
-
-
 function special_form($form){
   return ($GLOBALS['special_forms']->deref($form));
 }
@@ -302,12 +324,12 @@ function sexp_eval($sexp, $context){
     case "Cell":
       $car = sexp_eval(Cell::car($sexp), $context);
       $cdr = Cell::cdr($sexp);
-      if(Symbol::is_a($car) and special_form($car)){
+      if(is_a($car,'Symbol') and special_form($car)){
         $special = special_form($car);
         return $special($cdr,$context);
       }
-      elseif(Lambda::is_a($car)){
-        return pissed_call_lambda($car,$cdr,$context);
+      elseif(is_a($car,'Applicible')){
+        return $car->lisp_eval($cdr,$context);
       }
       else{
         return "<INVALID FUNCTION>";
@@ -353,7 +375,7 @@ function sexp_print($form, $in_list=false){
   case "object":
     switch(get_class($form)){
     case "Cell":
-      if(Cell::is_a(Cell::cdr($form)) or is_null(Cell::cdr($form))){
+      if(is_a(Cell::cdr($form), 'Cell') or is_null(Cell::cdr($form))){
         return ($in_list ? "" : "(")
           .sexp_print(Cell::car($form))
           .sexp_print(Cell::cdr($form), true)."";
@@ -369,6 +391,11 @@ function sexp_print($form, $in_list=false){
       break;
     case "Lambda":
       return sexp_print(Cell::cons(Symbol::symbol("lambda")
+                                   ,Cell::cons($form->arg_list
+                                               ,$form->body)));
+      break;
+    case "Macro":
+      return sexp_print(Cell::cons(Symbol::symbol("macro")
                                    ,Cell::cons($form->arg_list
                                                ,$form->body)));
       break;
@@ -402,7 +429,7 @@ function repl($input = false, $context = false){
 function load_file($path, $context = false){
   $input = new BufferedStream(fopen($path,'r'));
   $context = $context ? $context : $GLOBALS['global_context'];
-
+  $result = null;
   peel_whitespace($input);
 
   while(!$input->eof()){
@@ -410,6 +437,8 @@ function load_file($path, $context = false){
     peel_whitespace($input);
     $result = sexp_eval($sexp,$context);
   }
+
+  return $result;
 }
 
 
@@ -464,7 +493,7 @@ def_special_form('car', function($args, $context){
     return Cell::car($car);
   });
 
-def_special_form('car', function($arg, $context){
+def_special_form('cdr', function($args, $context){
     $car = sexp_eval(Cell::car($args), $context);
     return Cell::cdr($car);
   });
@@ -520,9 +549,12 @@ def_special_form('let', function ($args, $context){
     return $do(Cell::cdr($args),$sub_context);
   });
 
-
 def_special_form('lambda', function ($args, $context){
     return new Lambda(Cell::car($args), Cell::cdr($args));
+  });
+
+def_special_form('macro', function ($args, $context){
+    return new Macro(Cell::car($args), Cell::cdr($args));
   });
 
 def_special_form('foreign', function ($args, $context){
@@ -547,6 +579,11 @@ def_special_form('foreign-object', function ($args, $context){
 def_special_form('foreign-global', function ($args, $context){
     $name = sexp_eval(Cell::car($args), $context);
     return $GLOBALS[$name];
+  });
+
+def_special_form('foreign-print', function ($args, $context){
+    $sexp = sexp_eval(Cell::car($args), $context);
+    return Print "".$sexp;
   });
 
 def_special_form('foreign-var', function($args, $context){
@@ -607,8 +644,5 @@ def_special_form('when', function ($args, $context){
     }
   });
 
-
 load_file('./pissed.lisp');
-repl();
-
 ?>
