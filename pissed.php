@@ -24,8 +24,17 @@ $GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
 
 //Classes
 
+abstract class LispObject{
+  abstract public function lisp_print();
+}
 
-class Cell{
+
+abstract class Applicible extends LispObject{
+  abstract public function lisp_eval($args, $context);
+}
+
+
+class Cell extends LispObject{
   public $_car;
   public $_cdr;
 
@@ -49,32 +58,22 @@ class Cell{
   public static function setcar($cell,$car){$cell->_car = $car;return $cell;}
   public static function setcdr($cell,$cdr){$cell->_cdr = $cdr;return $cdr;}
 
-}
-
-
-class BufferedStream{
-  public $stream;
-  public $buffer;
-
-  function __construct($stream){
-    $this->stream = $stream;
-    $this->buffer = Array();
-  }
-
-  function getc(){
-    return ((sizeof($this->buffer) > 0) ?
-            array_pop($this->buffer) : fgetc($this->stream));
-  }
-
-  function putc($char){array_unshift($this->buffer,$char);}
-
-  function eof(){
-    return feof($this->stream);
+  public function lisp_print($in_list = false){
+    if(is_a(Cell::cdr($this), 'Cell') or is_null(Cell::cdr($this))){
+      return ($in_list ? "" : "(")
+        .sexp_print(Cell::car($this))
+        .sexp_print(Cell::cdr($this), true)."";
+    }
+    else{
+      return "(cons "
+        .sexp_print(Cell::car($this))." "
+        .sexp_print(Cell::cdr($this)).") ";
+    }
   }
 }
 
 
-class Symbol{
+class Symbol extends LispObject{
   public $symbol_name;
   public static $symbols = Array();
 
@@ -96,6 +95,10 @@ class Symbol{
 
   public static function is($current,$desired){
     return ((is_a($current, 'Symbol') and ($current == Symbol::symbol($desired)))) ? true : false;
+  }
+
+  public function lisp_print(){
+    return $this->symbol_name." ";
   }
 }
 
@@ -145,11 +148,6 @@ class Context{
 }
 
 
-abstract class Applicible{
-  abstract public function lisp_eval($args, $context);
-}
-
-
 class Lambda extends Applicible{
   public $arg_list;
   public $body;
@@ -173,6 +171,12 @@ class Lambda extends Applicible{
 
     $let = special_form(Symbol::symbol('let'));
     return $let(Cell::cons($zipped, $this->body), $context);
+  }
+
+  public function lisp_print(){
+    return sexp_print(Cell::cons(Symbol::symbol("lambda")
+                                 ,Cell::cons($this->arg_list
+                                             ,$this->body)));
   }
 }
 
@@ -199,6 +203,34 @@ class Macro extends Applicible{
 
     $let = special_form(Symbol::symbol('let'));
     return $let(Cell::cons($zipped, $this->body), $context);
+  }
+
+  public function lisp_print(){
+    return sexp_print(Cell::cons(Symbol::symbol("macro")
+                                 ,Cell::cons($this->arg_list
+                                             ,$this->body)));
+  }
+}
+
+
+class BufferedStream{
+  public $stream;
+  public $buffer;
+
+  function __construct($stream){
+    $this->stream = $stream;
+    $this->buffer = Array();
+  }
+
+  function getc(){
+    return ((sizeof($this->buffer) > 0) ?
+            array_pop($this->buffer) : fgetc($this->stream));
+  }
+
+  function putc($char){array_unshift($this->buffer,$char);}
+
+  function eof(){
+    return feof($this->stream);
   }
 }
 
@@ -373,33 +405,10 @@ function sexp_print($form, $in_list=false){
     return '"'.str_replace('"','\"',$form).'"'." ";
     break;
   case "object":
-    switch(get_class($form)){
-    case "Cell":
-      if(is_a(Cell::cdr($form), 'Cell') or is_null(Cell::cdr($form))){
-        return ($in_list ? "" : "(")
-          .sexp_print(Cell::car($form))
-          .sexp_print(Cell::cdr($form), true)."";
-      }
-      else{
-        return "(cons "
-          .sexp_print(Cell::car($form))." "
-          .sexp_print(Cell::cdr($form)).") ";
-      }
-      break;
-    case "Symbol":
-      return $form->symbol_name." ";
-      break;
-    case "Lambda":
-      return sexp_print(Cell::cons(Symbol::symbol("lambda")
-                                   ,Cell::cons($form->arg_list
-                                               ,$form->body)));
-      break;
-    case "Macro":
-      return sexp_print(Cell::cons(Symbol::symbol("macro")
-                                   ,Cell::cons($form->arg_list
-                                               ,$form->body)));
-      break;
-    default:
+    if(is_a($form, 'LispObject')){
+      return($form->lisp_print($in_list));
+    }
+    else{
       return "<UNKOWN CLASS: ".get_class($form)." >";
     }
     break;
