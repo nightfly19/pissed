@@ -15,15 +15,32 @@ define('TOKEN_STRING', '/^".*"$/');
 //Otherwise the token lasts until a whitespace character or ( or ) is found
 
 class Cell{
-  
+  public $_car;
+  public $_cdr;
+  public static $_empty;
   function __construct($car, $cdr){
+    $this->_car = $car;
+    $this->_cdr = $cdr;
   }
-  public static function cons($car,$cdr=null){return Array($car,$cdr);}
-  public static function car($cell){return $cell[0];}
-  public static function cdr($cell){return $cell[1];}
-  public static function setcar($cell,$car){$cell[0] = $car; return $cell;}
-  public static function setcdr($cell,$cdr){$cell[1] = $cdr; return $cell;}
+  public static function cons($car,$cdr=null){return new Cell($car, $cdr);}
+  public static function car($cell){return $cell->_car;}
+  public static function cdr($cell){return $cell->_cdr;}
+  public static function setcar($cell,$car){$cell->_car = $car;return $cell;}
+  public static function setcdr($cell,$cdr){$cell->_cdr = $cdr;return $cdr;}
 }
+
+class EmptyCell{
+  public static $_empty;
+  function __construct(){}
+  public static function emptyCell(){return $EmptyCell::_empty;}
+  public static function car($cell){return null;}
+  public static function cdr($cell){return null;}
+  public static function setcar($cell,$car){throw new Exception("No");}
+  public static function setcdr($cell,$cdr){throw new Exception("No");}
+}
+
+EmptyCell::$_empty = new EmptyCell();
+Cell::$_empty = EmptyCell::$_empty;
 
 class BufferedStream{
   public $stream;
@@ -283,8 +300,8 @@ function sexp_print($form, $in_list=false){
     case "Lambda":
       //return "<LAMBDA>";
       return sexp_print(Cell::cons(Symbol::symbol("lambda")
-                             ,Cell::cons($form->arg_list
-                                   ,$form->body)));
+                                   ,Cell::cons($form->arg_list
+                                               ,$form->body)));
       break;
     default:
       return "<UNKOWN CLASS>";
@@ -384,7 +401,7 @@ def_special_form('list', function ($args, $context){
     $cdr = Cell::cdr($args);
     $list = special_form(Symbol::symbol('list'));
     return Cell::cons(sexp_eval($car, $context),
-                (($cdr === null) ? null : $list($cdr, $context)));
+                      (($cdr === null) ? null : $list($cdr, $context)));
   });
 
 def_special_form('def', function ($args, $context){
