@@ -32,6 +32,32 @@ abstract class LispObject{
 
 abstract class Applicible extends LispObject{
   abstract public function lisp_eval($args, $context);
+
+  public static function bind_args($arg_list, $arguments, $context, $evaled = true){
+    $rem_arg_list = $arg_list;
+    $rem_arguments = $arguments;
+    while($rem_arg_list){
+      $context->def(Cell::car($rem_arg_list),
+                    (($evaled) ? sexp_eval(Cell::car($rem_arguments), $context) :
+                     Cell::car($rem_arguments)));
+      $rem_arg_list = Cell::cdr($rem_arg_list);
+      $rem_arguments = Cell::cdr($rem_arguments);
+    }
+  }
+
+  public static function execute_forms($forms, $context){
+    $body_forms = $forms;
+    $result = null;
+    while($body_forms){
+      $form = Cell::car($body_forms);
+      if(is_a($form, 'Cell')){
+        $form = eval_in_list($form, $context);
+      }
+      $result = sexp_eval($form, $context);
+      $body_forms = Cell::cdr($body_forms);
+    }
+    return $result;
+  }
 }
 
 
@@ -113,20 +139,10 @@ class Lambda extends Applicible{
     $this->body = $body;
   }
 
-
   function lisp_eval($args, $context){
-    $r_arg_list = $this->arg_list;
-    $r_args = $args;
-    $zipped = null;
-    while($r_arg_list){
-      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
-                                      Cell::cons(Cell::car($r_args))), $zipped);
-      $r_arg_list = Cell::cdr($r_arg_list);
-      $r_args = Cell::cdr($r_args);
-    }
-
-    $let = special_form(Symbol::symbol('let'));
-    return $let(Cell::cons($zipped, $this->body), $context);
+    $lambda_context = new Context($context);
+    Applicible::bind_args($this->arg_list, $args, $lambda_context);
+    return Applicible::execute_forms($this->body, $lambda_context);
   }
 
   public function lisp_print(){
@@ -532,34 +548,36 @@ def_special_form('exit', function ($args, $context){
     exit(Cell::car($args));
   });
 
-def_special_form('do', function ($args, $context){
-    $output = null;
-    $current = $args;
-    while(!is_null($current)){
-      $form = Cell::car($current);
-      if(is_a($form, 'Cell')){
-        $form = eval_in_list($form, $context);
-      }
-      $output = sexp_eval($form, $context);
-      $current = Cell::cdr($current);
-    }
-    return $output;
+/*
+  def_special_form('do', function ($args, $context){
+  $output = null;
+  $current = $args;
+  while(!is_null($current)){
+  $form = Cell::car($current);
+  if(is_a($form, 'Cell')){
+  $form = eval_in_list($form, $context);
+  }
+  $output = sexp_eval($form, $context);
+  $current = Cell::cdr($current);
+  }
+  return $output;
   });
 
-def_special_form('let', function ($args, $context){
-    $sub_context = new Context($context);
-    $sym_defs = Cell::car($args);
-    while($sym_defs){
-      $var_def = Cell::car($sym_defs);
-      $sub_context->def(Cell::car($var_def), Cell::car(Cell::cdr($var_def)));
-      $sym_defs = Cell::cdr($sym_defs);
-    }
+  def_special_form('let', function ($args, $context){
+  $sub_context = new Context($context);
+  $sym_defs = Cell::car($args);
+  while($sym_defs){
+  $var_def = Cell::car($sym_defs);
+  $sub_context->def(Cell::car($var_def), Cell::car(Cell::cdr($var_def)));
+  $sym_defs = Cell::cdr($sym_defs);
+  }
 
-    $sub_context->immutable = true;
+  $sub_context->immutable = true;
 
-    $do = special_form(Symbol::symbol('do'));
-    return $do(Cell::cdr($args),$sub_context);
+  $do = special_form(Symbol::symbol('do'));
+  return $do(Cell::cdr($args),$sub_context);
   });
+*/
 
 def_special_form('lambda', function ($args, $context){
     return new Lambda(Cell::car($args), Cell::cdr($args));
