@@ -1,5 +1,8 @@
 <?php
 
+//Constants
+
+
 define('TOKEN_OP', '(');
 define('TOKEN_CP', ')');
 define('TOKEN_BACKTICK', '`');
@@ -9,38 +12,47 @@ define('TOKEN_INTEGER', '/^-?\d+$/');
 define('TOKEN_FLOAT', '/^-?(\d+\.\d*|\d*\.\d+)$/');
 define('TOKEN_STRING', '/^".*"$/');
 
-//Prefix: There can be any ammount of whitespace at the beginning of the token.
-//Single char tokens: These can only be 1 char long ( )
-//If the first char is a " the token lasts until the another " is found that isn't preceded by \
-//Otherwise the token lasts until a whitespace character or ( or ) is found
+
+//Globals
+
+
+$GLOBALS['special_forms']  = new Context();
+$GLOBALS['global_context'] = new Context();
+$GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
+
+
+//Classes
+
 
 class Cell{
   public $_car;
   public $_cdr;
-  public static $_empty;
+
   function __construct($car, $cdr){
     $this->_car = $car;
     $this->_cdr = $cdr;
   }
+
   public static function cons($car,$cdr=null){return new Cell($car, $cdr);}
-  public static function car($cell){return $cell->_car;}
-  public static function cdr($cell){return $cell->_cdr;}
+
+  public static function car($cell){
+    if(is_null($cell)){return null;}
+    return $cell->_car;
+  }
+
+  public static function cdr($cell){
+    if(is_null($cell)){return null;}
+    return $cell->_cdr;
+  }
+
   public static function setcar($cell,$car){$cell->_car = $car;return $cell;}
   public static function setcdr($cell,$cdr){$cell->_cdr = $cdr;return $cdr;}
+
+  public static function is_a($cell){
+    return (is_object($cell) and get_class($cell) == "Cell") ? true : false;
+  }
 }
 
-class EmptyCell{
-  public static $_empty;
-  function __construct(){}
-  public static function emptyCell(){return $EmptyCell::_empty;}
-  public static function car($cell){return null;}
-  public static function cdr($cell){return null;}
-  public static function setcar($cell,$car){throw new Exception("No");}
-  public static function setcdr($cell,$cdr){throw new Exception("No");}
-}
-
-EmptyCell::$_empty = new EmptyCell();
-Cell::$_empty = EmptyCell::$_empty;
 
 class BufferedStream{
   public $stream;
@@ -62,7 +74,6 @@ class BufferedStream{
     return feof($this->stream);
   }
 }
-
 
 
 class Symbol{
@@ -91,7 +102,6 @@ class Symbol{
   public static function is($current,$desired){
     return ((Symbol::is_a($current) and ($current == Symbol::symbol($desired)))) ? true : false;
   }
-
 }
 
 
@@ -107,7 +117,6 @@ class Context{
   }
 
   function def($symbol, $value=null){
-
     if($this->contains($symbol)){
       //return Cell::car(setCell::car($this->symbols[$symbol->symbol_name], $value));
       $this->symbols[$symbol->symbol_name] = Cell::cons($value);
@@ -139,7 +148,6 @@ class Context{
       return null;
     }
   }
-
 }
 
 
@@ -151,21 +159,16 @@ class Lambda{
     $this->arg_list = $arg_list;
     $this->body = $body;
   }
+
+  public static function is_a($lambda){
+    return (is_object($lambda)
+            and (get_class($lambda) == "Lambda")) ? true : false;
+  }
 }
-
-$GLOBALS['special_forms']  = new Context();
-$GLOBALS['global_context'] = new Context();
-$GLOBALS['buffered_stdin'] = new BufferedStream(fopen('php://stdin','r'));
-
-function def_special_form($name,$function){
-  //print "Name: ".Symbol::symbol($name)->symbol_name."\n";
-  //print_r($GLOBALS['special_forms']);
-  return $GLOBALS['special_forms']->def(Symbol::symbol($name), $function);
-}
-
 
 
 //Reader section
+
 
 function is_token($token){
   return (preg_match(TOKEN_PATTERN, $token) and !preg_match('/[\n\r]$/',$token));
@@ -196,24 +199,6 @@ function resolve_primative($token){
 }
 
 
-
-function is_a_lambda($lambda){
-  if(is_object($lambda)
-     and (get_class($lambda) == "Lambda")){
-    return true;
-  }
-  else{
-    return false;
-  }
-}
-
-
-
-function report_token($token){
-  return resolve_primative($token);
-}
-
-
 function read_token($bstream){
   $buffer = '';
   $first = true;
@@ -221,12 +206,12 @@ function read_token($bstream){
   do{
     $buffer .= $bstream->getc();
     if(preg_match(TOKEN_COMPLETE, $buffer)){
-      return report_token($buffer);
+      return resolve_primative($buffer);
     }
   } while(is_token($buffer));
 
   $bstream->putc(substr($buffer,-1));
-  return report_token(substr($buffer,0,-1));
+  return resolve_primative(substr($buffer,0,-1));
 }
 
 
@@ -258,8 +243,100 @@ function sexp_read($bstream){
 }
 
 
+//Eval Stuff
+
+
+function list_to_array($list){
+  $array = Array();
+  $cur = $list;
+  while($cur){
+    array_push($array, Cell::car($cur));
+    $cur = Cell::cdr($cur);
+  }
+  return $array;
+}
+
+
+function eval_in_list($list,$context){
+  return (is_null($list)) ? null :
+    Cell::cons(sexp_eval(Cell::car($list), $context),
+               eval_in_list(Cell::cdr($list), $context));
+}
+
+
+function pissed_call_lambda($lambda, $args, $context){
+  $r_arg_list = $lambda->arg_list;
+  $r_args = $args;
+  $zipped = null;
+  while($r_arg_list){
+    $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list), Cell::cons(Cell::car($r_args))), $zipped);
+    $r_arg_list = Cell::cdr($r_arg_list);
+    $r_args = Cell::cdr($r_args);
+  }
+
+  $let = special_form(Symbol::symbol('let'));
+  return $let(Cell::cons($zipped, $lambda->body), $context);
+}
+
+
+function special_form($form){
+  return ($GLOBALS['special_forms']->deref($form));
+}
+
+
+function sexp_eval($sexp, $context){
+  switch(gettype($sexp)){
+  case "NULL":
+    return null;
+    break;
+  case "integer":
+    return $sexp;
+    break;
+  case "double":
+    return $sexp;
+    break;
+  case "string":
+    return $sexp;
+    break;
+  case "object":
+    switch(get_class($sexp)){
+    case "Cell":
+      $car = sexp_eval(Cell::car($sexp), $context);
+      $cdr = Cell::cdr($sexp);
+      if(Symbol::is_a($car) and special_form($car)){
+        $special = special_form($car);
+        return $special($cdr,$context);
+      }
+      elseif(Lambda::is_a($car)){
+        return pissed_call_lambda($car,$cdr,$context);
+      }
+      else{
+        return "<INVALID FUNCTION>";
+      }
+      break;
+    case "Symbol":
+      if($GLOBALS['special_forms']->contains($sexp)){
+        return $sexp;
+      }
+      else{
+        return $context->deref($sexp);
+      }
+      break;
+    default:
+      return $sexp;
+      break;
+    }
+    break;
+  default:
+    return $sexp;
+    break;
+  }
+}
+
 
 //Print stuff
+
+
 function sexp_print($form, $in_list=false){
   switch(gettype($form)){
   case "NULL":
@@ -279,21 +356,20 @@ function sexp_print($form, $in_list=false){
   case "string":
     return '"'.str_replace('"','\"',$form).'"'." ";
     break;
-  case "array":
-    if(gettype(Cell::cdr($form)) == "array"
-       or gettype(Cell::cdr($form)) == "NULL"){
-      return ($in_list ? "" : "(")
-        .sexp_print(Cell::car($form))
-        .sexp_print(Cell::cdr($form), true)."";
-    }
-    else{
-      return "(cons "
-        .sexp_print(Cell::car($form))." "
-        .sexp_print(Cell::cdr($form)).") ";
-    }
-    break;
   case "object":
     switch(get_class($form)){
+    case "Cell":
+      if(Cell::is_a(Cell::cdr($form)) or is_null(Cell::cdr($form))){
+        return ($in_list ? "" : "(")
+          .sexp_print(Cell::car($form))
+          .sexp_print(Cell::cdr($form), true)."";
+      }
+      else{
+        return "(cons "
+          .sexp_print(Cell::car($form))." "
+          .sexp_print(Cell::cdr($form)).") ";
+      }
+      break;
     case "Symbol":
       return $form->symbol_name." ";
       break;
@@ -304,41 +380,51 @@ function sexp_print($form, $in_list=false){
                                                ,$form->body)));
       break;
     default:
-      return "<UNKOWN CLASS>";
+      return "<UNKOWN CLASS: ".get_class($form)." >";
     }
     break;
   default:
-    return "<OTHER THING>\n";
+    return "<OTHER TYPE: ".typeof($form)." >\n";
     break;
   }
 }
 
 
-//Runtime stuff
+//Runtime
 
 
+function repl($input = false, $context = false){
+  $input = $input ? $input : $GLOBALS['buffered_stdin'];
+  $context = $context ? $context : $GLOBALS['global_context'];
 
-function list_to_array($list){
-  $array = Array();
-  $cur = $list;
-  while($cur){
-    array_push($array, Cell::car($cur));
-    $cur = Cell::cdr($cur);
-  };
-
-  return $array;
-}
-
-
-function eval_in_list($list,$context){
-  if(is_null($list)){
-    return null;
-  }
-  else{
-    return Cell::cons(sexp_eval(Cell::car($list), $context), eval_in_list(Cell::cdr($list), $context));
+  while(true){
+    print "\n> ";
+    $sexp = sexp_read($input);
+    $result = sexp_eval($sexp,$context);
+    print "\n".sexp_print($result);
   }
 }
 
+
+function load_file($path, $context = false){
+  $input = new BufferedStream(fopen($path,'r'));
+  $context = $context ? $context : $GLOBALS['global_context'];
+
+  peel_whitespace($input);
+
+  while(!$input->eof()){
+    $sexp = sexp_read($input);
+    peel_whitespace($input);
+    $result = sexp_eval($sexp,$context);
+  }
+}
+
+
+function def_special_form($name,$function){
+  //print "Name: ".Symbol::symbol($name)->symbol_name."\n";
+  //print_r($GLOBALS['special_forms']);
+  return $GLOBALS['special_forms']->def(Symbol::symbol($name), $function);
+}
 
 
 def_special_form('+', function ($args, $context){
@@ -461,8 +547,6 @@ def_special_form('foreign', function ($args, $context){
     return (call_user_func_array(__NAMESPACE__.$fun,$args));
   });
 
-
-
 def_special_form('foreign-object', function ($args, $context){
     $class = Cell::car($args);
     $args = list_to_array(Cell::cdr($args));
@@ -516,8 +600,6 @@ def_special_form('if', function ($args, $context){
     }
   });
 
-
-
 def_special_form('eval', function ($args, $context){
     $sexp = Cell::car($args);
     return sexp_eval($sexp, $context);
@@ -534,102 +616,6 @@ def_special_form('when', function ($args, $context){
       return null;
     }
   });
-
-function pissed_call_lambda($lambda, $args, $context){
-  $r_arg_list = $lambda->arg_list;
-  $r_args = $args;
-  $zipped = null;
-  while($r_arg_list){
-    $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list), Cell::cons(Cell::car($r_args))), $zipped);
-    $r_arg_list = Cell::cdr($r_arg_list);
-    $r_args = Cell::cdr($r_args);
-  }
-
-  $let = special_form(Symbol::symbol('let'));
-  return $let(Cell::cons($zipped, $lambda->body), $context);
-}
-
-
-
-function special_form($form){
-  return ($GLOBALS['special_forms']->deref($form));
-}
-
-
-
-function sexp_eval($sexp, $context){
-  switch(gettype($sexp)){
-  case "NULL":
-    return null;
-    break;
-  case "integer":
-    return $sexp;
-    break;
-  case "double":
-    return $sexp;
-    break;
-  case "string":
-    return $sexp;
-    break;
-  case "array":
-    $car = sexp_eval(Cell::car($sexp), $context);
-    $cdr = Cell::cdr($sexp);
-    if(Symbol::is_a($car) and special_form($car)){
-      $special = special_form($car);
-      return $special($cdr,$context);
-    }
-    elseif(is_a_lambda($car)){
-      return pissed_call_lambda($car,$cdr,$context);
-    }
-    else{
-      return "<INVALID FUNCTION>";
-    }
-    break;
-  case "object":
-    switch(get_class($sexp)){
-    case "Symbol":
-      if($GLOBALS['special_forms']->contains($sexp)){
-        return $sexp;
-      }
-      else{
-        return $context->deref($sexp);
-      }
-      break;
-    default:
-      return $sexp;
-      break;
-    }
-    break;
-  default:
-    return $sexp;
-    break;
-  }
-}
-
-function repl($input = false, $context = false){
-  $input = $input ? $input : $GLOBALS['buffered_stdin'];
-  $context = $context ? $context : $GLOBALS['global_context'];
-
-  while(true){
-    print "> ";
-    $sexp = sexp_read($input);
-    $result = sexp_eval($sexp,$context);
-    print sexp_print($result)."\n";
-  }
-}
-
-function load_file($path, $context = false){
-  $input = new BufferedStream(fopen($path,'r'));
-  $context = $context ? $context : $GLOBALS['global_context'];
-
-  peel_whitespace($input);
-
-  while(!$input->eof()){
-    $sexp = sexp_read($input);
-    peel_whitespace($input);
-    $result = sexp_eval($sexp,$context);
-  }
-}
 
 
 load_file('./pissed.lisp');
