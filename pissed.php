@@ -118,7 +118,6 @@ class Context{
 
   function def($symbol, $value=null){
     if($this->contains($symbol)){
-      //return Cell::car(setCell::car($this->symbols[$symbol->symbol_name], $value));
       $this->symbols[$symbol->symbol_name] = Cell::cons($value);
       return $this->deref($symbol);
     }
@@ -340,12 +339,7 @@ function sexp_eval($sexp, $context){
 function sexp_print($form, $in_list=false){
   switch(gettype($form)){
   case "NULL":
-    if($in_list){
-      return ")";
-    }
-    else{
-      return "()";
-    }
+    return ($in_list) ? ")" : "()";
     break;
   case "integer":
     return "$form"." ";
@@ -374,7 +368,6 @@ function sexp_print($form, $in_list=false){
       return $form->symbol_name." ";
       break;
     case "Lambda":
-      //return "<LAMBDA>";
       return sexp_print(Cell::cons(Symbol::symbol("lambda")
                                    ,Cell::cons($form->arg_list
                                                ,$form->body)));
@@ -421,8 +414,6 @@ function load_file($path, $context = false){
 
 
 function def_special_form($name,$function){
-  //print "Name: ".Symbol::symbol($name)->symbol_name."\n";
-  //print_r($GLOBALS['special_forms']);
   return $GLOBALS['special_forms']->def(Symbol::symbol($name), $function);
 }
 
@@ -510,7 +501,6 @@ def_special_form('do', function ($args, $context){
                           , $context);
       $current = Cell::cdr($current);
     }
-
     return $output;
   });
 
