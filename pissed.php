@@ -145,6 +145,7 @@ class Lambda extends Applicible{
     //If a Applicible object has it's own context run with that
     $lambda_context = new Context($this->context ? $this->context->copy($context) : $context);
     Applicible::bind_args($this->arg_list, $args, $lambda_context);
+    $lambda_context->immutable = true;
     return Applicible::execute_forms($this->body, $lambda_context);
   }
 
@@ -159,17 +160,20 @@ class Lambda extends Applicible{
 class Macro extends Applicible{
   public $arg_list;
   public $body;
+  public $context;
 
-  function __construct($arg_list, $body){
+  function __construct($arg_list, $body, $context = null){
     $this->arg_list = $arg_list;
     $this->body = $body;
+    $this->context = $context;
   }
 
   function lisp_eval($args, $context){
-    $macro_context = new Context($context);
-    //Applicible::bind_args($this->arg_list, $args, $macro_context,false);
-    //return $this->body;
-    //return sexp_eval(Applicible::execute_forms($this->body, $macro_context), $macro_context);
+    //If a Applicible object has it's own context run with that
+    $lambda_context = new Context($this->context ? $this->context->copy($context) : $context);
+    Applicible::bind_args($this->arg_list, $args, $lambda_context, false);
+    $lambda_context->immutable = true;
+    return sexp_eval(Applicible::execute_forms($this->body, $lambda_context), $lambda_context);
   }
 
   public function lisp_print(){
@@ -583,21 +587,14 @@ def_special_form('lambda', function ($args, $context){
     return new Lambda(Cell::car($args), Cell::cdr($args));
   });
 
-/*
-  def_special_form('macro', function ($args, $context){
+def_special_form('macro', function ($args, $context){
   return new Macro(Cell::car($args), Cell::cdr($args));
   });
-*/
 
 def_special_form('foreign', function ($args, $context){
     $fun = Cell::car($args);
     $args = Cell::cdr($args);
-    //$args = Cell::cdr($args);
-    //print "mew: ".$fun."\n";
-    //print sexp_print($args)."\n\n";
     $args = list_to_array(eval_in_list($args, $context));
-    //print_r($args);
-    //exit(0);
     return (call_user_func_array(__NAMESPACE__.$fun,$args));
   });
 
