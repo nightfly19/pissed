@@ -133,14 +133,17 @@ class Symbol extends LispObject{
 class Lambda extends Applicible{
   public $arg_list;
   public $body;
+  public $context;
 
-  function __construct($arg_list, $body){
+  function __construct($arg_list, $body, $context = null){
     $this->arg_list = $arg_list;
     $this->body = $body;
+    $this->context = $context;
   }
 
   function lisp_eval($args, $context){
-    $lambda_context = new Context($context);
+    //If a Applicible object has it's own context run with that
+    $lambda_context = new Context($this->context ? $this->context->copy($context) : $context);
     Applicible::bind_args($this->arg_list, $args, $lambda_context);
     return Applicible::execute_forms($this->body, $lambda_context);
   }
@@ -161,7 +164,6 @@ class Macro extends Applicible{
     $this->arg_list = $arg_list;
     $this->body = $body;
   }
-
 
   function lisp_eval($args, $context){
     $macro_context = new Context($context);
@@ -219,6 +221,12 @@ class Context{
     else{
       return null;
     }
+  }
+
+  function copy($parent_context){
+    $new_copy = clone $this;
+    $new_copy->parent = $parent_context;
+    return $new_copy;
   }
 }
 
@@ -576,8 +584,8 @@ def_special_form('lambda', function ($args, $context){
   });
 
 /*
-def_special_form('macro', function ($args, $context){
-    return new Macro(Cell::car($args), Cell::cdr($args));
+  def_special_form('macro', function ($args, $context){
+  return new Macro(Cell::car($args), Cell::cdr($args));
   });
 */
 
