@@ -164,18 +164,10 @@ class Macro extends Applicible{
 
 
   function lisp_eval($args, $context){
-    $r_arg_list = $this->arg_list;
-    $r_args = $args;
-    $zipped = null;
-    while($r_arg_list){
-      $zipped = Cell::cons(Cell::cons(Cell::car($r_arg_list),
-                                      Cell::cons(Cell::car($r_args))), $zipped);
-      $r_arg_list = Cell::cdr($r_arg_list);
-      $r_args = Cell::cdr($r_args);
-    }
-
-    $let = special_form(Symbol::symbol('let'));
-    return $let(Cell::cons($zipped, $this->body), $context);
+    $macro_context = new Context($context);
+    //Applicible::bind_args($this->arg_list, $args, $macro_context,false);
+    //return $this->body;
+    //return sexp_eval(Applicible::execute_forms($this->body, $macro_context), $macro_context);
   }
 
   public function lisp_print(){
@@ -583,9 +575,11 @@ def_special_form('lambda', function ($args, $context){
     return new Lambda(Cell::car($args), Cell::cdr($args));
   });
 
+/*
 def_special_form('macro', function ($args, $context){
     return new Macro(Cell::car($args), Cell::cdr($args));
   });
+*/
 
 def_special_form('foreign', function ($args, $context){
     $fun = Cell::car($args);
